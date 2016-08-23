@@ -4,32 +4,38 @@ require 'childprocess'
 require 'fileutils'
 require 'logger'
 require 'net/smtp'
+require 'yaml'
 
 ChildProcess.posix_spawn = true
 
 module DeepSeqWorkflow
-  @@hostname = `hostname`
-  @@basecall_dir = File.join('/', 'data', 'basecalls')
-  @@safe_location_dir = '/seq_data'
+  HOSTNAME = `hostname`
+  #BASECALL_DIR = File.join('/', 'data', 'basecalls')
+  BASECALL_DIR = File.join('basecalls')
+  #SAFE_LOCATION_DIR = '/seq_data'
+  SAFE_LOCATION_DIR = 'seq_data'
 
-  def self.start
-    Dir.glob(File.join(@@basecall_dir, '.seq_*', '*'), FNM_PATHNAME).collect(&:directory?).each do |run_dir|
+  def self.start(step)
+    Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), FNM_PATHNAME).collect(&:directory?).each do |run_dir|
       task = DirTask.new(run_dir)
-      task.go!
+      task.run_from(step)
     end
   end
 
   class DirTask
+    ALLOWED_STEP_NAMES = [:forbid, :archive, :duplicity, :filter_data]
+
     def initialize(run_dir)
       @run_dir = run_dir
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
-      @log_file_name = File.join(@@basecall_dir, ".log", "#{@run_name}.log")
+      @log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.log")
     end
 
     def logger
       @logger ||= Logger.new(@log_file_name)
       @logger.level = Logger::INFO
+      @logger
     end
 
     # Has the sequencer finished its task?
@@ -43,17 +49,12 @@ module DeepSeqWorkflow
     end
 
     # This is the function that kicks the workflow going.
-    def go!
-      logger.info "[workflow_start] Starting deep seq data workflow..."
-      logger.info self.to_yaml
-      archive!
-      logger.info "[workflow_end] End of deep seq data workflow."
-    end
-
-    def run_from_step(step)
-      ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data]
+    def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
-        send(step)
+        logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
+        logger.info self.to_yaml(exclude: :logger)
+        send("#{step}!")
+        logger.info "[workflow_end] End of deep seq data workflow."
       else
         # illegal step parameter specified: notify and exit
         logger.error "Illegal step parameter specified: #{step}"
@@ -63,6 +64,7 @@ module DeepSeqWorkflow
       end
     end
 
+    private
     # Forbid access to the sequencing data once the sequencing is done.
     def forbid!
       begin
@@ -73,6 +75,7 @@ module DeepSeqWorkflow
             sleep 10
             File.chmod 0000, @run_dir
             logger.info "Changed permissions for #{@run_dir} to 0000"
+            exit(0)
           end
         end
       rescue StandardError => e
@@ -83,7 +86,7 @@ module DeepSeqWorkflow
         notify_admins('forbid_dir', e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
     end
 
@@ -105,7 +108,7 @@ module DeepSeqWorkflow
           rsync_type = seq_complete? ? 'final' : 'partial'
           logger.info "Starting #{rsync_type} rsync..."
 
-          Rsync.run(@run_dir, File.join(@@safe_location_dir, @run_name)) do |result|
+          Rsync.run(@run_dir, File.join(SAFE_LOCATION_DIR, @run_name)) do |result|
 
             if result.success?
               result.changes.each do |change|
@@ -132,7 +135,7 @@ module DeepSeqWorkflow
         notify_admins('sync', e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
     end
 
@@ -154,7 +157,7 @@ module DeepSeqWorkflow
           sync!
 
           year = "20#{@run_name[0..1]}"
-          local_archive_dir = File.join(@@basecall_dir, year)
+          local_archive_dir = File.join(BASECALL_DIR, year)
           FileUtils.touch @lock_file_name
 
           # final rsync done
@@ -171,8 +174,8 @@ module DeepSeqWorkflow
             File.chmod 0755, @new_run_dir
             logger.info "Changed permissions for #{@new_run_dir} to 0755"
 
-            FileUtils.ln_s @new_run_dir, @@basecall_dir
-            logger.info "Aliased #{@new_run_dir} to #{@@basecall_dir}"
+            FileUtils.ln_s @new_run_dir, BASECALL_DIR
+            logger.info "Aliased #{@new_run_dir} to #{BASECALL_DIR}"
 
           else
             raise DuplicityProcessError("Duplicate run name detected (#{@run_name})")
@@ -193,7 +196,7 @@ module DeepSeqWorkflow
         notify_admins('archive', e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
     end
 
@@ -206,7 +209,7 @@ module DeepSeqWorkflow
           unless File.exists?(duplicity_lock)
             FileUtils.touch @lock_file_name
 
-            log_file_name = File.join(@@basecall_dir, ".log", "#{@run_name}.duplicity.log")
+            log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.duplicity.log")
 
             archive_user = "bzpkuntz"
             archive_host = "mdcbio.zib.de"
@@ -260,7 +263,7 @@ module DeepSeqWorkflow
         exit(1)
       ensure
         log_file.close if log_file
-        FileUtils.rm @lock_file_name
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
     end
 
@@ -285,7 +288,7 @@ module DeepSeqWorkflow
           end
 
           # cleaning up the second copy of the data since the backup completed successfully
-          FileUtils.rm(FileUtils.join(@@safe_location_dir, @run_name))
+          FileUtils.rm(FileUtils.join(SAFE_LOCATION_DIR, @run_name))
 
         else
           logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
@@ -299,7 +302,7 @@ module DeepSeqWorkflow
         notify_admins("duplicity_function", e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
 
     end
@@ -315,7 +318,7 @@ module DeepSeqWorkflow
         
         Error code: #{op}
         Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
-        Host: #{@@hostname}
+        Host: #{HOSTNAME}
 
         See #{@lock_file_name} for details.\n|
 
@@ -336,6 +339,7 @@ module DeepSeqWorkflow
     end
   end
 
+  public
   class FilterProcessError < StandardError; end
   class DuplicityProcessError < StandardError; end
   class DuplicityLockError < StandardError; end

@@ -1,0 +1,95 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'bundler/setup'
+require 'commander'
+require_relative 'deep_seq_workflow'
+
+class DSW
+  include Commander::Methods
+  include DeepSeqWorkflow
+
+  def run
+    program :name, 'dsw'
+    program :version, '0.0.1'
+    program :description, 'Deep Seq experiments backup workflow'
+
+    command :forbid do |c|
+      c.syntax = 'dsw forbid [options]'
+      c.summary = ''
+      c.description = 'Revokes all permission to all the completed runs or the specified rundir'
+      #c.example 'description', 'command example'
+      c.option '--rundir DIR', String, 'acts only on the specified absolute path'
+      c.action do |args, options|
+
+        options.default rundir: nil
+
+        if options.rundir.nil?
+          DeepSeqWorkflow.start(:forbid)
+        else
+          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:forbid)
+        end
+
+      end
+    end
+
+    command :archive do |c|
+      c.syntax = 'dsw archive [options]'
+      c.summary = ''
+      c.description = 'Calls the initial step of the workflow.'
+      #c.example 'description', 'command example'
+      c.option '--rundir DIR', String, 'acts only on the specified directory'
+      c.action do |args, options|
+
+        options.default rundir: nil
+
+        if options.rundir.nil?
+          DeepSeqWorkflow.start(:archive)
+        else
+          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:archive)
+        end
+
+      end
+    end
+
+    command :duplicity do |c|
+      c.syntax = 'dsw duplicity [options]'
+      c.summary = ''
+      c.description = 'Calls the duplicity backup subroutine, attempting to add another incremental backup.'
+      c.option '--rundir DIR', String, 'acts only on the specified directory'
+      c.action do |args, options|
+
+        options.default rundir: nil
+
+        if options.rundir.nil?
+          DeepSeqWorkflow.start(:duplicity)
+        else
+          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity)
+        end
+
+      end
+    end
+
+    command :filter_data do |c|
+      c.syntax = 'dsw filter_data [options]'
+      c.summary = ''
+      c.description = ''
+      c.option '--rundir DIR', String, 'acts only on the specified directory'
+      c.action do |args, options|
+
+        options.default rundir: nil
+
+        if options.rundir.nil?
+          DeepSeqWorkflow.start(:filter_data)
+        else
+          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:filter_data)
+        end
+
+      end
+    end
+
+    run!
+  end
+end
+
+DSW.new.run if $0 == __FILE__

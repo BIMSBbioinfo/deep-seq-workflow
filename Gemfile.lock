@@ -1,0 +1,21 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    childprocess (0.5.9)
+      ffi (~> 1.0, >= 1.0.11)
+    commander (4.4.0)
+      highline (~> 1.7.2)
+    ffi (1.9.14)
+    highline (1.7.8)
+    rsync (1.0.9)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  childprocess (~> 0.5.9)
+  commander
+  rsync (~> 1.0, >= 1.0.9)
+
+BUNDLED WITH
+   1.12.5
