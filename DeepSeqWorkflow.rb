@@ -51,7 +51,7 @@ module DeepSeqWorkflow
     end
 
     def run_from_step(step)
-      ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data, :cleanup]
+      ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data]
       if ALLOWED_STEP_NAMES.include?(step)
         send(step)
       else
@@ -125,7 +125,7 @@ module DeepSeqWorkflow
         end
 
       rescue StandardError => e
-        logger.error "while calling the sync'ing function:"
+        logger.error "while performing the sync'ing step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
         logger.error "exiting with status 1"
@@ -149,7 +149,10 @@ module DeepSeqWorkflow
     def archive!
       begin
         if seq_complete? && dir_forbidden?
+          # sync! takes care of checking the lock file presence and quits in
+          # case it's there.
           sync!
+
           year = "20#{@run_name[0..1]}"
           local_archive_dir = File.join(@@basecall_dir, year)
           FileUtils.touch @lock_file_name
@@ -183,7 +186,7 @@ module DeepSeqWorkflow
           exit(0)
         end
       rescue StandardError => e
-        logger.error "while calling the archive function:"
+        logger.error "while performing the archiviation step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
         logger.error "exiting with status 1"
@@ -194,7 +197,7 @@ module DeepSeqWorkflow
       end
     end
 
-    # step 2.1
+    # WIP doc
     def duplicity!
       duplicity_lock = "#{@run_dir}.duplicity.lock"
 
@@ -261,8 +264,8 @@ module DeepSeqWorkflow
       end
     end
 
-    # WIP
-    def filter_data
+    # WIP doc
+    def filter_data!
       begin
         unless File.exists?(@lock_file_name)
           FileUtils.touch @lock_file_name
@@ -314,17 +317,20 @@ module DeepSeqWorkflow
         Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
         Host: #{@@hostname}
 
-        See #{@lock_file_name} for details.
+        See #{@lock_file_name} for details.\n|
 
-        #{error.message}
-        
-        #{error.backtrace.join("\n")}
+        unless error.nil?
+          msg << "\n"
+          msg << error.message
+          msg << "\n"
+          msg << error.backtrace.join("\n")
+          msg << "\n"
+        end
 
-        ---
-        dsw|
+        msg << "\n---\ndsw"
 
         Net::SMTP.start('your.smtp.server', 25) do |smtp|
-          smtp.send_message msgstr, 'dsw@mdc-berlin.net', adm
+          smtp.send_message msg, 'dsw@mdc-berlin.net', adm
         end
       end
     end
