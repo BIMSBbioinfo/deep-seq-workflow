@@ -5,15 +5,17 @@ require 'fileutils'
 require 'logger'
 require 'net/smtp'
 require 'yaml'
+#require 'shellwords'
 
 ChildProcess.posix_spawn = true
 
 module DeepSeqWorkflow
   HOSTNAME = `hostname`
-  #BASECALL_DIR = File.join('/', 'data', 'basecalls')
-  BASECALL_DIR = File.join('basecalls')
-  #SAFE_LOCATION_DIR = '/seq_data'
-  SAFE_LOCATION_DIR = 'seq_data'
+  # PREFIX = FileUtils.pwd
+  PREFIX = '/'
+  BASECALL_DIR = File.join(PREFIX, 'data', 'basecalls')
+  SAFE_LOCATION_DIR =  File.join(PREFIX, 'seq_data')
+  DEBUG = false
 
   def self.start(step)
     Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), FNM_PATHNAME).collect(&:directory?).each do |run_dir|
@@ -23,7 +25,7 @@ module DeepSeqWorkflow
   end
 
   class DirTask
-    ALLOWED_STEP_NAMES = [:forbid, :archive, :duplicity, :filter_data]
+    ALLOWED_STEP_NAMES = [:forbid, :archive, :duplicity, :filter_data].freeze
 
     def initialize(run_dir)
       @run_dir = run_dir
@@ -34,7 +36,11 @@ module DeepSeqWorkflow
 
     def logger
       @logger ||= Logger.new(@log_file_name)
-      @logger.level = Logger::INFO
+      if DEBUG
+        @logger.level = Logger::DEBUG
+      else
+        @logger.level = Logger::INFO
+      end
       @logger
     end
 
@@ -45,7 +51,11 @@ module DeepSeqWorkflow
 
     # Did we already forbid access to the sequencing data?
     def dir_forbidden?
-      File.stat(@run_dir).mode.to_s(8) == "100000"
+      if DEBUG
+        File.stat(@run_dir).mode.to_s(8) == "40755"
+      else
+        File.stat(@run_dir).mode.to_s(8) == "100000"
+      end
     end
 
     def lock_file_present?
@@ -65,7 +75,7 @@ module DeepSeqWorkflow
     def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
         logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
-        logger.info self.to_yaml(exclude: :logger)
+        logger.info self.to_yaml
         send("#{step}!")
         logger.info "[workflow_end] End of deep seq data workflow."
       else
@@ -121,7 +131,7 @@ module DeepSeqWorkflow
           rsync_type = seq_complete? ? 'final' : 'partial'
           logger.info "Starting #{rsync_type} rsync..."
 
-          Rsync.run(@run_dir, File.join(SAFE_LOCATION_DIR, @run_name)) do |result|
+          Rsync.run("#{@run_dir}/", File.join(SAFE_LOCATION_DIR, @run_name), '-raP') do |result|
 
             if result.success?
               result.changes.each do |change|
@@ -131,14 +141,14 @@ module DeepSeqWorkflow
               logger.info "End of #{rsync_type} rsync; Exiting Workflow..."
             else
               raise RsyncProcessError.new(
-                "'rsync' exited with nonzero status (#{rsync_type} rsync)\n#{result.error}")
+                "'rsync' exited with nonzero status (#{rsync_type} rsync), motivation: #{result.error}")
             end
           end
 
         rescue StandardError => e
-          logger.error "while performing the sync'ing step:"
+          logger.error "#{e.class} encountered while performing the sync'ing step"
           logger.error e.message
-          logger.error e.backtrace.join("\n")
+          logger.error "trace:\n#{e.backtrace.join("\n")}"
           logger.error "exiting with status 1"
           notify_admins('sync', e)
           exit(1)
@@ -223,7 +233,9 @@ module DeepSeqWorkflow
     # actual duplicity process execution.
     #
     def duplicity!
-      duplicity_lock = "#{@run_dir}.duplicity.lock"
+      @new_run_dir ||= @run_dir
+
+      duplicity_lock = "#{@new_run_dir}.duplicity.lock"
 
       unless lock_file_present?
         begin
@@ -237,16 +249,16 @@ module DeepSeqWorkflow
             archive_user = "bzpkuntz"
             archive_host = "mdcbio.zib.de"
             archive_dir  = "/mdcbiosam/archiv/solexa_gpg_test"
-            local_duplicity_cache="/data/basecalls/.archive"
+            local_duplicity_cache = File.join(BASECALL_DIR, ".archive")
 
             # Default set of flag/value pairs
             duplicity_flags = {
               '--archive-dir': local_duplicity_cache,
               '--name': @run_name,
               '--no-encryption': nil,
-              '--temp-dir': '/tmp',
-              '--verbosity': "'1'"
-            }.collect{ |kv| kv.join(' ') }
+              '--tempdir': '/tmp',
+              '--verbosity': 1
+            }.collect{ |kv| kv.compact.join('=') }
           
             # The actual command line string being built
             cmd_line = ['duplicity', 'full']
@@ -346,38 +358,42 @@ module DeepSeqWorkflow
     end
 
     def notify_admins(op, error =nil)
-      admins = ["carlomaria.massimo@mdc-berlin.de" "dan.munteanu@mdc-berlin.de"]
-      admins.each do |adm|
-        msg = %Q|
-        From: deep_seq_workflow <dsw@mdc-berlin.net>
-        To: #{adm}
-        Subject: [Deep Seq workflow] Error: #{op}
-        Date: #{Time.now}
-        
-        Error code: #{op}
-        Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
-        Host: #{HOSTNAME}
+      unless DEBUG
+        admins = ["carlomaria.massimo@mdc-berlin.de" "dan.munteanu@mdc-berlin.de"]
+        admins.each do |adm|
+          msg = %Q|
+          From: deep_seq_workflow <dsw@mdc-berlin.net>
+          To: #{adm}
+          Subject: [Deep Seq workflow] Error: #{op}
+          Date: #{Time.now}
+          
+          Error code: #{op}
+          Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
+          Host: #{HOSTNAME}
 
-        See #{@lock_file_name} for details.\n|
+          See #{@lock_file_name} for details.\n|
 
-        unless error.nil?
-          msg << "\n"
-          msg << error.message
-          msg << "\n"
-          msg << error.backtrace.join("\n")
-          msg << "\n"
+          unless error.nil?
+            msg << "\n"
+            msg << error.message
+            msg << "\n"
+            msg << error.backtrace.join("\n")
+            msg << "\n"
+          end
+
+          msg << "\n---\ndsw"
+
+          Net::SMTP.start('localhost', 25) do |smtp|
+            smtp.send_message msg, 'dsw@mdc-berlin.net', adm
+          end
         end
-
-        msg << "\n---\ndsw"
-
-        Net::SMTP.start('your.smtp.server', 25) do |smtp|
-          smtp.send_message msg, 'dsw@mdc-berlin.net', adm
-        end
+      else
+        logger.debug "notify_admins(#{op})"
+        logger.debug error.class
       end
     end
   end
 
-  public
   class FilterProcessError < StandardError; end
   class DuplicityProcessError < StandardError; end
   class DuplicityLockError < StandardError; end
