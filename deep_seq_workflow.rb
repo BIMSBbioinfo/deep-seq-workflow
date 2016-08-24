@@ -48,6 +48,19 @@ module DeepSeqWorkflow
       File.stat(@run_dir).mode.to_s(8) == "100000"
     end
 
+    def lock_file_present?
+      begin
+        File.exists?(@lock_file_name)
+      rescue StandardError => e
+        logger.error "checking the main lock file presence:"
+        logger.error e.message
+        logger.error e.backtrace.join("\n")
+        logger.error "exiting with status 1"
+        notify_admins('lock_file_check', e)
+        exit(1)
+      end
+    end
+
     # This is the function that kicks the workflow going.
     def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
@@ -101,8 +114,8 @@ module DeepSeqWorkflow
     #
     def sync!
       # check if the lock is already present in which case skip
-      begin 
-        unless File.exists?(@lock_file_name)
+      # unless lock_file_present?
+        begin 
           FileUtils.touch @lock_file_name
 
           rsync_type = seq_complete? ? 'final' : 'partial'
@@ -122,21 +135,20 @@ module DeepSeqWorkflow
             end
           end
 
-        else
-          logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
-          exit(0)
+        rescue StandardError => e
+          logger.error "while performing the sync'ing step:"
+          logger.error e.message
+          logger.error e.backtrace.join("\n")
+          logger.error "exiting with status 1"
+          notify_admins('sync', e)
+          exit(1)
+        ensure
+          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
         end
-
-      rescue StandardError => e
-        logger.error "while performing the sync'ing step:"
-        logger.error e.message
-        logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
-        notify_admins('sync', e)
-        exit(1)
-      ensure
-        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
-      end
+      # else
+      #   logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
+      #   exit(0)
+      # end
     end
 
     #
@@ -150,72 +162,84 @@ module DeepSeqWorkflow
     # Otherwise it calls the sync'ing function and exits (partial sync)
     #
     def archive!
-      begin
-        if seq_complete? && dir_forbidden?
-          # sync! takes care of checking the lock file presence and quits in
-          # case it's there.
-          sync!
-
-          year = "20#{@run_name[0..1]}"
-          local_archive_dir = File.join(BASECALL_DIR, year)
+      unless lock_file_present?
+        begin
           FileUtils.touch @lock_file_name
 
-          # final rsync done
-          FileUtils.mkdir local_archive_dir unless File.directory?(local_archive_dir)
+          if seq_complete? && dir_forbidden?
+            sync!
 
-          @new_run_dir = File.join(local_archive_dir, @run_name) 
+            year = "20#{@run_name[0..1]}"
+            local_archive_dir = File.join(BASECALL_DIR, year)
 
-          unless File.directory?(@new_run_dir)
+            # final rsync done
+            FileUtils.mkdir local_archive_dir unless File.directory?(local_archive_dir)
 
-            # Move dir to final location and link back to /data/basecalls
-            FileUtils.mv @run_dir, @new_run_dir
-            logger.info "#{@run_dir} moved to #{@new_run_dir}"
-           
-            File.chmod 0755, @new_run_dir
-            logger.info "Changed permissions for #{@new_run_dir} to 0755"
+            @new_run_dir = File.join(local_archive_dir, @run_name) 
 
-            FileUtils.ln_s @new_run_dir, BASECALL_DIR
-            logger.info "Aliased #{@new_run_dir} to #{BASECALL_DIR}"
+            unless File.directory?(@new_run_dir)
+
+              # Move dir to final location and link back to /data/basecalls
+              FileUtils.mv @run_dir, @new_run_dir
+              logger.info "#{@run_dir} moved to #{@new_run_dir}"
+             
+              File.chmod 0755, @new_run_dir
+              logger.info "Changed permissions for #{@new_run_dir} to 0755"
+
+              FileUtils.ln_s @new_run_dir, BASECALL_DIR
+              logger.info "Aliased #{@new_run_dir} to #{BASECALL_DIR}"
+
+            else
+              raise DuplicateRunError("Duplicate run name detected (#{@run_name})")
+            end
+
+            duplicity!
 
           else
-            raise DuplicityProcessError("Duplicate run name detected (#{@run_name})")
+            logger.warn "Sequencing still running, just sync'ing."
+            sync!
+            exit(0)
           end
-
-          duplicity!
-
-        else
-          logger.warn "Sequencing still running, just sync'ing."
-          sync!
-          exit(0)
+        rescue StandardError => e
+          logger.error "while performing the archiviation step:"
+          logger.error e.message
+          logger.error e.backtrace.join("\n")
+          logger.error "exiting with status 1"
+          notify_admins('archive', e)
+          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+          exit(1)
         end
-      rescue StandardError => e
-        logger.error "while performing the archiviation step:"
-        logger.error e.message
-        logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
-        notify_admins('archive', e)
-        exit(1)
-      ensure
-        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+      else
+        logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
+        exit(0)
       end
     end
 
-    # WIP doc
+    #
+    # This function is a wrapper for the duplicity command to execute to create
+    # a full remote backup.
+    # The presence of the main lock is checked in order to avoid race conditions.
+    # Moreover this function employs another lock file in order to track the
+    # actual duplicity process execution.
+    #
     def duplicity!
       duplicity_lock = "#{@run_dir}.duplicity.lock"
 
-      begin
-        unless File.exists?(@lock_file_name)
+      unless lock_file_present?
+        begin
           unless File.exists?(duplicity_lock)
             FileUtils.touch @lock_file_name
 
+            # Duplicity-specific log file
             log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.duplicity.log")
 
+            # Remote backup location access data
             archive_user = "bzpkuntz"
             archive_host = "mdcbio.zib.de"
             archive_dir  = "/mdcbiosam/archiv/solexa_gpg_test"
             local_duplicity_cache="/data/basecalls/.archive"
 
+            # Default set of flag/value pairs
             duplicity_flags = {
               '--archive-dir': local_duplicity_cache,
               '--name': @run_name,
@@ -224,6 +248,7 @@ module DeepSeqWorkflow
               '--verbosity': "'1'"
             }.collect{ |kv| kv.join(' ') }
           
+            # The actual command line string being built
             cmd_line = ['duplicity', 'full']
             cmd_line += duplicity_flags
             cmd_line += [@new_run_dir,
@@ -231,17 +256,25 @@ module DeepSeqWorkflow
 
             log_file = File.open(log_file_name, 'a')
 
-            duplicity = ChildProcess.build(*cmd_line)
-            duplicity.leader = true
-            duplicity.detach = true
-            duplicity.io.stdout = duplicity.io.stderr = log_file
+            # Sub-process creation (see https://github.com/jarib/childprocess)
+            duplicity_proc = ChildProcess.build(*cmd_line)
+            # Detach it from the parent
+            duplicity_proc.leader = true
+            duplicity_proc.detach = true
+            # Assign output streams to the log file
+            duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
 
             FileUtils.touch duplicity_lock
-            duplicity.start
-            duplicity.wait
+            # Start execution and wait for termination
+            duplicity_proc.start
+            duplicity_proc.wait
 
-            if duplicity.exit_code == 0
+            if duplicity_proc.exit_code == 0
+              # Remove duplicity-specific lock only on success
+              FileUtils.rm duplicity_lock
               logger.info "Duplicity successfully completed a remote backup"
+              
+              # Call next step
               filter_data!
             else
               raise DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{log_file_name}' for details.")
@@ -250,44 +283,49 @@ module DeepSeqWorkflow
           else
             raise DuplicityLockError.new("Duplicity lock file is still present! Aborting workflow.")
           end
-        else
-          logger.warn "Main lock file \"#{@lock_file_name}\" still there, skipping."
-          exit(0)
+        rescue StandardError => e
+          logger.error "in duplicity backup function:"
+          logger.error e.message
+          logger.error e.backtrace.join("\n")
+          logger.error "exiting with status 1"
+          notify_admins("duplicity_function", e)
+          exit(1)
+        ensure
+          log_file.close if log_file
+          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
         end
-      rescue StandardError => e
-        logger.error "in duplicity backup function:"
-        logger.error e.message
-        logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
-        notify_admins("duplicity_function", e)
-        exit(1)
-      ensure
-        log_file.close if log_file
-        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+      else
+        logger.warn "Main lock file \"#{@lock_file_name}\" still there, skipping."
+        exit(0)
       end
     end
 
-    # WIP doc
+    #
+    # This function builds up a list of files to be deleted and deletes them.
     def filter_data!
       begin
         unless File.exists?(@lock_file_name)
           FileUtils.touch @lock_file_name
 
+          # The find process command line
           flist_cmd = %Q[ find ./ -name '*' | \
             egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq' | \
             sed 's/^..//' | \
             xargs ]
 
+          # Runs the above command and saves the output in 'file_list';
+          # reports eventual errors.
           file_list = %x[ #{flist_cmd} ]
           raise FindProcessError.new("'find' child process exited with nonzero status") if $?.exitstatus != 0
 
           file_list = file_list.split("\n")
 
+          # Removes the selected files, 100 at a time
           file_list.each_slice(100) do |slice|
             FileUtils.rm(slice.join(''))
           end
 
-          # cleaning up the second copy of the data since the backup completed successfully
+          # Cleaning up the second copy of the data since the backup completed successfully
           FileUtils.rm(FileUtils.join(SAFE_LOCATION_DIR, @run_name))
 
         else
@@ -307,7 +345,7 @@ module DeepSeqWorkflow
 
     end
 
-    def notify_admins(op, error)
+    def notify_admins(op, error =nil)
       admins = ["carlomaria.massimo@mdc-berlin.de" "dan.munteanu@mdc-berlin.de"]
       admins.each do |adm|
         msg = %Q|
@@ -344,4 +382,5 @@ module DeepSeqWorkflow
   class DuplicityProcessError < StandardError; end
   class DuplicityLockError < StandardError; end
   class RsyncProcessError < StandardError; end
+  class DuplicateRunError < StandardError; end
 end
