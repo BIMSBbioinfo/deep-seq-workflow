@@ -18,7 +18,7 @@ module DeepSeqWorkflow
   DEBUG = false
 
   def self.start(step)
-    Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::NM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
+    Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
       task = DirTask.new(run_dir)
       task.run_from(step)
     end
@@ -58,11 +58,13 @@ module DeepSeqWorkflow
       end
     end
 
-    def lock_file_present?
+    def lock_file_present?(lock_file_name)
       begin
-        File.exists?(@lock_file_name)
+        # TODO check lock file age and send a warning if it is older than a
+        # given threshold.
+        File.exists?(lock_file_name)
       rescue StandardError => e
-        logger.error "checking the main lock file presence:"
+        logger.error "checking lock file '#{lock_file_name}' presence:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
         logger.error "exiting with status 1"
@@ -90,15 +92,19 @@ module DeepSeqWorkflow
     private
     # Forbid access to the sequencing data once the sequencing is done.
     def forbid!
-      begin
-        if seq_complete?
-          unless dir_forbidden?
+      lock_file_name = "#{@run_dir}.forbid.lock"
 
-            FileUtils.touch @lock_file_name
-            sleep 10
-            File.chmod 0000, @run_dir
-            logger.info "Changed permissions for #{@run_dir} to 0000"
-            exit(0)
+      begin
+        unless lock_file_present?(lock_file_name)
+          if seq_complete?
+            unless dir_forbidden?
+
+              FileUtils.touch lock_file_name
+              sleep 10
+              File.chmod 0000, @run_dir
+              logger.info "Changed permissions for #{@run_dir} to 0000"
+              exit(0)
+            end
           end
         end
       rescue StandardError => e
@@ -109,7 +115,7 @@ module DeepSeqWorkflow
         notify_admins('forbid_dir', e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+        FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
       end
     end
 
@@ -123,42 +129,36 @@ module DeepSeqWorkflow
     # - logs and either returns or exit on errors (leaving the lock in place).
     #
     def sync!
-      # check if the lock is already present in which case skip
-      # unless lock_file_present?
-        begin 
-          FileUtils.touch @lock_file_name
+      begin 
+        FileUtils.touch @lock_file_name
 
-          rsync_type = seq_complete? ? 'final' : 'partial'
-          logger.info "Starting #{rsync_type} rsync..."
+        rsync_type = seq_complete? ? 'final' : 'partial'
+        logger.info "Starting #{rsync_type} rsync..."
 
-          Rsync.run("#{@run_dir}/", File.join(SAFE_LOCATION_DIR, @run_name), '-raP') do |result|
+        Rsync.run("#{@run_dir}/", File.join(SAFE_LOCATION_DIR, @run_name), '-raP') do |result|
 
-            if result.success?
-              result.changes.each do |change|
-                logger.info "#{change.filename} (#{change.summary})"
-              end
-              logger.info "#{result.changes.count} change(s) sync'd."
-              logger.info "End of #{rsync_type} rsync; Exiting Workflow..."
-            else
-              raise RsyncProcessError.new(
-                "'rsync' exited with nonzero status (#{rsync_type} rsync), motivation: #{result.error}")
+          if result.success?
+            result.changes.each do |change|
+              logger.info "#{change.filename} (#{change.summary})"
             end
+            logger.info "#{result.changes.count} change(s) sync'd."
+            logger.info "End of #{rsync_type} rsync; Exiting Workflow..."
+          else
+            raise RsyncProcessError.new(
+              "'rsync' exited with nonzero status (#{rsync_type} rsync), motivation: #{result.error}")
           end
-
-        rescue StandardError => e
-          logger.error "#{e.class} encountered while performing the sync'ing step"
-          logger.error e.message
-          logger.error "trace:\n#{e.backtrace.join("\n")}"
-          logger.error "exiting with status 1"
-          notify_admins('sync', e)
-          exit(1)
-        ensure
-          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
         end
-      # else
-      #   logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
-      #   exit(0)
-      # end
+
+      rescue StandardError => e
+        logger.error "#{e.class} encountered while performing the sync'ing step"
+        logger.error e.message
+        logger.error "trace:\n#{e.backtrace.join("\n")}"
+        logger.error "exiting with status 1"
+        notify_admins('sync', e)
+        exit(1)
+      ensure
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+      end
     end
 
     #
@@ -172,7 +172,7 @@ module DeepSeqWorkflow
     # Otherwise it calls the sync'ing function and exits (partial sync)
     #
     def archive!
-      unless lock_file_present?
+      unless lock_file_present?(@lock_file_name)
         begin
           FileUtils.touch @lock_file_name
 
@@ -216,7 +216,7 @@ module DeepSeqWorkflow
           logger.error e.backtrace.join("\n")
           logger.error "exiting with status 1"
           notify_admins('archive', e)
-          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+          FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
           exit(1)
         end
       else
@@ -237,9 +237,9 @@ module DeepSeqWorkflow
 
       duplicity_lock = "#{@new_run_dir}.duplicity.lock"
 
-      unless lock_file_present?
+      unless lock_file_present?(@lock_file_name)
         begin
-          unless File.exists?(duplicity_lock)
+          unless lock_file_present?(duplicity_lock)
             FileUtils.touch @lock_file_name
 
             # Duplicity-specific log file
@@ -304,7 +304,7 @@ module DeepSeqWorkflow
           exit(1)
         ensure
           log_file.close if log_file
-          FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+          FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
         end
       else
         logger.warn "Main lock file \"#{@lock_file_name}\" still there, skipping."
@@ -316,7 +316,7 @@ module DeepSeqWorkflow
     # This function builds up a list of files to be deleted and deletes them.
     def filter_data!
       begin
-        unless File.exists?(@lock_file_name)
+        unless lock_file_present?(@lock_file_name)
           FileUtils.touch @lock_file_name
 
           # The find process command line
@@ -371,7 +371,7 @@ module DeepSeqWorkflow
           Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
           Host: #{HOSTNAME}
 
-          See #{@lock_file_name} for details.\n|
+          See #{@log_file_name} for details.\n|
 
           unless error.nil?
             msg << "\n"
