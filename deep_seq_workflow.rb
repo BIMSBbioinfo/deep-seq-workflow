@@ -18,7 +18,7 @@ module DeepSeqWorkflow
   DEBUG = false
 
   def self.start(step)
-    Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), FNM_PATHNAME).collect(&:directory?).each do |run_dir|
+    Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::NM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
       task = DirTask.new(run_dir)
       task.run_from(step)
     end
@@ -75,7 +75,7 @@ module DeepSeqWorkflow
     def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
         logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
-        logger.info self.to_yaml
+        logger.info self.to_yaml unless step == :forbid
         send("#{step}!")
         logger.info "[workflow_end] End of deep seq data workflow."
       else
