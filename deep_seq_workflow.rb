@@ -20,12 +20,19 @@ module DeepSeqWorkflow
   def self.start(step)
     Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
       task = DirTask.new(run_dir)
-      task.run_from(step)
+
+      if step == :forbid
+        # different, faster cronjob, this way we get less log noise
+        task.forbid!
+      else
+        task.run_from(step)
+      end
+
     end
   end
 
   class DirTask
-    ALLOWED_STEP_NAMES = [:forbid, :archive, :duplicity, :filter_data].freeze
+    ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data].freeze
 
     def initialize(run_dir)
       @run_dir = run_dir
@@ -36,6 +43,11 @@ module DeepSeqWorkflow
 
     def logger
       @logger ||= Logger.new(@log_file_name)
+
+      @logger.formatter = proc do |severity, datetime, progname, msg|
+        Format % [severity[0..0], format_datetime(time), HOSTNAME, $$, severity, progname, msg2str(msg)]
+      end
+
       if DEBUG
         @logger.level = Logger::DEBUG
       else
@@ -77,7 +89,7 @@ module DeepSeqWorkflow
     def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
         logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
-        logger.info self.to_yaml unless step == :forbid
+        logger.info self.to_yaml
         send("#{step}!")
         logger.info "[workflow_end] End of deep seq data workflow."
       else

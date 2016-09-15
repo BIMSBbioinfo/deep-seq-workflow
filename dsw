@@ -27,7 +27,7 @@ class DSW
         if options.rundir.nil?
           DeepSeqWorkflow.start(:forbid)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:forbid)
+          DeepSeqWorkflow::DirTask.new(options.rundir).forbid!
         end
 
       end
