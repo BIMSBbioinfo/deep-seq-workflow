@@ -66,7 +66,7 @@ module DeepSeqWorkflow
       if DEBUG
         File.stat(@run_dir).mode.to_s(8) == "40755"
       else
-        File.stat(@run_dir).mode.to_s(8) == "100000"
+        File.stat(@run_dir).mode.to_s(8) == "100000" || File.stat(@run_dir).mode.to_s(8) == "40000"
       end
     end
 
@@ -115,7 +115,6 @@ module DeepSeqWorkflow
               sleep 10
               File.chmod 0000, @run_dir
               logger.info "Changed permissions for #{@run_dir} to 0000"
-              exit(0)
             end
           end
         end
