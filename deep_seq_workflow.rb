@@ -10,7 +10,7 @@ require 'yaml'
 ChildProcess.posix_spawn = true
 
 module DeepSeqWorkflow
-  HOSTNAME = `hostname`
+  HOSTNAME = `hostname`.chomp
   # PREFIX = FileUtils.pwd
   PREFIX = '/'
   BASECALL_DIR = File.join(PREFIX, 'data', 'basecalls')
@@ -45,7 +45,7 @@ module DeepSeqWorkflow
       @logger ||= Logger.new(@log_file_name)
 
       @logger.formatter = proc do |severity, datetime, progname, msg|
-        Format % [severity[0..0], format_datetime(time), HOSTNAME, $$, severity, progname, msg2str(msg)]
+        "%s, [%s #%d] (%s) %5s -- %s: %s\n" % [severity[0..0], datetime, $$, HOSTNAME, severity, progname, msg]
       end
 
       if DEBUG
@@ -101,7 +101,6 @@ module DeepSeqWorkflow
       end
     end
 
-    private
     # Forbid access to the sequencing data once the sequencing is done.
     def forbid!
       lock_file_name = "#{@run_dir}.forbid.lock"
@@ -130,6 +129,8 @@ module DeepSeqWorkflow
       end
     end
 
+    private
+
     #
     # This function wraps the rsync phase be it either the partial or final one.
     # It first checks if there's already another workflow running for the current
@@ -153,7 +154,7 @@ module DeepSeqWorkflow
               logger.info "#{change.filename} (#{change.summary})"
             end
             logger.info "#{result.changes.count} change(s) sync'd."
-            logger.info "End of #{rsync_type} rsync; Exiting Workflow..."
+            logger.info "End of #{rsync_type} rsync."
           else
             raise RsyncProcessError.new(
               "'rsync' exited with nonzero status (#{rsync_type} rsync), motivation: #{result.error}")
@@ -204,6 +205,7 @@ module DeepSeqWorkflow
               FileUtils.mv @run_dir, @new_run_dir
               logger.info "#{@run_dir} moved to #{@new_run_dir}"
              
+              # maybe forcibly reassign group_id to deep_seq
               File.chmod 0755, @new_run_dir
               logger.info "Changed permissions for #{@new_run_dir} to 0755"
 
@@ -251,6 +253,7 @@ module DeepSeqWorkflow
       unless lock_file_present?(@lock_file_name)
         begin
           unless lock_file_present?(duplicity_lock)
+            logger.info "#{duplicity_lock} not found, setting up a new duplicity remote backup."
             FileUtils.touch @lock_file_name
 
             # Duplicity-specific log file
@@ -291,11 +294,12 @@ module DeepSeqWorkflow
             # Start execution and wait for termination
             duplicity_proc.start
             duplicity_proc.wait
+            logger.info "Started duplicity remote backup procedure. See '#{log_file_name}' for details."
 
             if duplicity_proc.exit_code == 0
               # Remove duplicity-specific lock only on success
               FileUtils.rm duplicity_lock
-              logger.info "Duplicity successfully completed a remote backup"
+              logger.info "Duplicity successfully completed a remote backup."
               
               # Call next step
               filter_data!
@@ -370,7 +374,7 @@ module DeepSeqWorkflow
 
     def notify_admins(op, error =nil)
       unless DEBUG
-        admins = ["carlomaria.massimo@mdc-berlin.de" "dan.munteanu@mdc-berlin.de"]
+        admins = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
         admins.each do |adm|
           msg = %Q|
           From: deep_seq_workflow <dsw@mdc-berlin.net>
