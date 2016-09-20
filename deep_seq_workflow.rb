@@ -14,7 +14,7 @@ module DeepSeqWorkflow
   # PREFIX = FileUtils.pwd
   PREFIX = '/'
   BASECALL_DIR = File.join(PREFIX, 'data', 'basecalls')
-  SAFE_LOCATION_DIR =  File.join(PREFIX, 'seq_data')
+  SAFE_LOCATION_DIR =  File.join(PREFIX, 'data', 'bc_copy')
   DEBUG = false
 
   def self.start(step)
@@ -205,7 +205,6 @@ module DeepSeqWorkflow
               FileUtils.mv @run_dir, @new_run_dir
               logger.info "#{@run_dir} moved to #{@new_run_dir}"
              
-              # maybe forcibly reassign group_id to deep_seq
               File.chmod 0755, @new_run_dir
               logger.info "Changed permissions for #{@new_run_dir} to 0755"
 
@@ -267,18 +266,20 @@ module DeepSeqWorkflow
 
             # Default set of flag/value pairs
             duplicity_flags = {
+              '--asynchronous-upload': nil,
+              '--volsize': 1024,
               '--archive-dir': local_duplicity_cache,
               '--name': @run_name,
               '--no-encryption': nil,
               '--tempdir': '/tmp',
-              '--verbosity': 1
+              '--verbosity': 8
             }.collect{ |kv| kv.compact.join('=') }
           
             # The actual command line string being built
             cmd_line = ['duplicity', 'full']
             cmd_line += duplicity_flags
             cmd_line += [@new_run_dir,
-              "sftp://#{archive_user}@#{archive_host}#{archive_dir}/#{@run_name}"]
+              "sftp://#{archive_user}@#{archive_host}/%2F#{archive_dir}/#{@run_name}"]
 
             log_file = File.open(log_file_name, 'a')
 
@@ -376,17 +377,16 @@ module DeepSeqWorkflow
       unless DEBUG
         admins = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
         admins.each do |adm|
-          msg = %Q|
-          From: deep_seq_workflow <dsw@mdc-berlin.net>
-          To: #{adm}
-          Subject: [Deep Seq workflow] Error: #{op}
-          Date: #{Time.now}
+          msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
+To: #{adm}
+Subject: [Deep Seq workflow] Error: #{op}
+Date: #{Time.now}
           
-          Error code: #{op}
-          Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
-          Host: #{HOSTNAME}
+Error code: #{op}
+Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
+Host: #{HOSTNAME}
 
-          See #{@log_file_name} for details.\n|
+See #{@log_file_name} for details.\n|
 
           unless error.nil?
             msg << "\n"
