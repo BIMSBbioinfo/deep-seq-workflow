@@ -261,7 +261,7 @@ module DeepSeqWorkflow
             # Remote backup location access data
             archive_user = "bzpkuntz"
             archive_host = "mdcbio.zib.de"
-            archive_dir  = "/mdcbiosam/archiv/solexa_gpg_test"
+            archive_dir  = "/mdcbiosam/archiv/solexa"
             local_duplicity_cache = File.join(BASECALL_DIR, ".archive")
 
             # Default set of flag/value pairs
@@ -279,7 +279,7 @@ module DeepSeqWorkflow
             cmd_line = ['duplicity', 'full']
             cmd_line += duplicity_flags
             cmd_line += [@new_run_dir,
-              "ssh://#{archive_user}@#{archive_host}:#{archive_dir}/#{@run_name}"]
+              "sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
 
             log_file = File.open(log_file_name, 'a')
 
