@@ -279,7 +279,7 @@ module DeepSeqWorkflow
             cmd_line = ['duplicity', 'full']
             cmd_line += duplicity_flags
             cmd_line += [@new_run_dir,
-              "sftp://#{archive_user}@#{archive_host}/%2F#{archive_dir}/#{@run_name}"]
+              "ssh://#{archive_user}@#{archive_host}:#{archive_dir}/#{@run_name}"]
 
             log_file = File.open(log_file_name, 'a')
 
@@ -292,10 +292,11 @@ module DeepSeqWorkflow
             duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
 
             FileUtils.touch duplicity_lock
+
             # Start execution and wait for termination
             duplicity_proc.start
-            duplicity_proc.wait
             logger.info "Started duplicity remote backup procedure. See '#{log_file_name}' for details."
+            duplicity_proc.wait
 
             if duplicity_proc.exit_code == 0
               # Remove duplicity-specific lock only on success
