@@ -40,6 +40,10 @@ module DeepSeqWorkflow
       @lock_file_name = "#{@run_dir}.lock"
       @log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.log")
     end
+    
+    def to_yaml_properties
+      instance_variables - [:@logger]
+    end
 
     def logger
       @logger ||= Logger.new(@log_file_name)
@@ -266,6 +270,7 @@ module DeepSeqWorkflow
 
             # Default set of flag/value pairs
             duplicity_flags = {
+              '--ssh-backend': 'pexpect',
               '--asynchronous-upload': nil,
               '--volsize': 1024,
               '--archive-dir': local_duplicity_cache,
@@ -302,6 +307,9 @@ module DeepSeqWorkflow
               # Remove duplicity-specific lock only on success
               FileUtils.rm duplicity_lock
               logger.info "Duplicity successfully completed a remote backup."
+
+              log_file.close if log_file
+              FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
               
               # Call next step
               filter_data!
