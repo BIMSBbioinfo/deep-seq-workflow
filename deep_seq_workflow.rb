@@ -2,6 +2,7 @@ require 'rsync'
 require 'childprocess'
 
 require 'fileutils'
+require 'find'
 require 'logger'
 require 'net/smtp'
 require 'yaml'
@@ -288,6 +289,9 @@ module DeepSeqWorkflow
 
             log_file = File.open(log_file_name, 'a')
 
+            logger.info "Duplicity command line:"
+            logger.info *cmd_line
+
             # Sub-process creation (see https://github.com/jarib/childprocess)
             duplicity_proc = ChildProcess.build(*cmd_line)
             # Detach it from the parent
@@ -362,8 +366,19 @@ module DeepSeqWorkflow
             FileUtils.rm(slice.join(''))
           end
 
+          ## restore users' access to sequencing files
+          Find.find(@new_run_dir) do |path|
+            if File.directory?(path)
+              File.chmod 0744, path
+            else
+              File.chmod 0755, path
+            end
+          end
+
           # Cleaning up the second copy of the data since the backup completed successfully
-          FileUtils.rm(FileUtils.join(SAFE_LOCATION_DIR, @run_name))
+          FileUtils.rm(File.join(SAFE_LOCATION_DIR, @run_name))
+
+          notify_run_finished
 
         else
           logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
@@ -415,6 +430,29 @@ See #{@log_file_name} for details.\n|
         logger.debug "notify_admins(#{op})"
         logger.debug error.class
       end
+    end
+
+    def notify_run_finished
+      unless DEBUG
+        users = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de"]
+        users.each do |user|
+          msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
+To: #{user}
+Subject: [Deep Seq workflow] Processing of run #{@run_name} finished
+Date: #{Time.now}
+          
+Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
+
+---\ndsw\n|
+
+          Net::SMTP.start('localhost', 25) do |smtp|
+            smtp.send_message msg, 'dsw@mdc-berlin.net', adm
+          end
+        end
+      else
+        logger.debug "Processing of run #{@run_name} finished"
+      end
+
     end
   end
 
