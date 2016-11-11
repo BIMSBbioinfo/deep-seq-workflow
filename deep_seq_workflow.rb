@@ -344,15 +344,15 @@ module DeepSeqWorkflow
     #
     # This function builds up a list of files to be deleted and deletes them.
     def filter_data!
+      @new_run_dir ||= @run_dir
+
       begin
         unless lock_file_present?(@lock_file_name)
           FileUtils.touch @lock_file_name
 
           # The find process command line
-          flist_cmd = %Q[ find ./ -name '*' | \
-            egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq' | \
-            sed 's/^..//' | \
-            xargs ]
+          flist_cmd = %Q[ find #{@new_run_dir} -name '*' | \
+            egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq']
 
           # Runs the above command and saves the output in 'file_list';
           # reports eventual errors.
@@ -361,9 +361,15 @@ module DeepSeqWorkflow
 
           file_list = file_list.split("\n")
 
+          logger.info "Removing the following files:"
+          logger.info file_list
+
           # Removes the selected files, 100 at a time
           file_list.each_slice(100) do |slice|
-            FileUtils.rm(slice.join(''))
+            regulars = slice.reject {|path| File.directory?(path)}
+            dirs = slice.select {|path| File.directory?(path)}
+            FileUtils.rm(regulars)
+            FileUtils.rmdir(dirs)
           end
 
           ## restore users' access to sequencing files
@@ -376,7 +382,8 @@ module DeepSeqWorkflow
           end
 
           # Cleaning up the second copy of the data since the backup completed successfully
-          FileUtils.rm(File.join(SAFE_LOCATION_DIR, @run_name))
+          logger.info "Removing backup from: #{File.join(SAFE_LOCATION_DIR, @run_name)}"
+          FileUtils.remove_dir(File.join(SAFE_LOCATION_DIR, @run_name), true)
 
           notify_run_finished
 
@@ -385,11 +392,11 @@ module DeepSeqWorkflow
           exit(0)
         end
       rescue StandardError => e
-        logger.error "in filer data function:"
+        logger.error "in filter data function:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
         logger.error "exiting with status 1"
-        notify_admins("duplicity_function", e)
+        notify_admins("filter_data", e)
         exit(1)
       ensure
         FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
@@ -456,7 +463,7 @@ Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
     end
   end
 
-  class FilterProcessError < StandardError; end
+  class FindProcessError < StandardError; end
   class DuplicityProcessError < StandardError; end
   class DuplicityLockError < StandardError; end
   class RsyncProcessError < StandardError; end
