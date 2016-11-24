@@ -15,7 +15,8 @@ module DeepSeqWorkflow
   # PREFIX = FileUtils.pwd
   PREFIX = '/'
   BASECALL_DIR = File.join(PREFIX, 'data', 'basecalls')
-  SAFE_LOCATION_DIR =  File.join(PREFIX, 'data', 'bc_copy')
+  SAFE_LOCATION_DIR = File.join(PREFIX, 'data', 'bc_copy')
+  SAMPLE_SHEETS_DIR = File.join(PREFIX, 'data', 'basecalls', 'sample_sheets')
   DEBUG = false
 
   def self.start(step)
@@ -33,7 +34,7 @@ module DeepSeqWorkflow
   end
 
   class DirTask
-    ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data].freeze
+    ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data, :demultiplex].freeze
 
     def initialize(run_dir)
       @run_dir = run_dir
@@ -46,6 +47,8 @@ module DeepSeqWorkflow
       instance_variables - [:@logger]
     end
 
+    # Defines the logger instance for this process and a custom format for the loglines
+    # so to include the hostname of the machine where this particualar instance is run.
     def logger
       @logger ||= Logger.new(@log_file_name)
 
@@ -75,6 +78,10 @@ module DeepSeqWorkflow
       end
     end
 
+    # Checks if a given lock file is present in the specified location.
+    # On the side this function checks the status of the NFS shares because
+    # if one of them is offline this function will throw an exception halting
+    # the workflow.
     def lock_file_present?(lock_file_name)
       begin
         # TODO check lock file age and send a warning if it is older than a
@@ -91,6 +98,8 @@ module DeepSeqWorkflow
     end
 
     # This is the function that kicks the workflow going.
+    # Takes a step name from a list of allowed names and start the workflow
+    # from there.
     def run_from(step)
       if ALLOWED_STEP_NAMES.include?(step)
         logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
@@ -107,6 +116,7 @@ module DeepSeqWorkflow
     end
 
     # Forbid access to the sequencing data once the sequencing is done.
+    # Directory permissions are set to 0
     def forbid!
       lock_file_name = "#{@run_dir}.forbid.lock"
 
@@ -290,7 +300,7 @@ module DeepSeqWorkflow
             log_file = File.open(log_file_name, 'a')
 
             logger.info "Duplicity command line:"
-            logger.info *cmd_line
+            logger.info cmd_line.join(' ')
 
             # Sub-process creation (see https://github.com/jarib/childprocess)
             duplicity_proc = ChildProcess.build(*cmd_line)
@@ -397,6 +407,29 @@ module DeepSeqWorkflow
         logger.error e.backtrace.join("\n")
         logger.error "exiting with status 1"
         notify_admins("filter_data", e)
+        exit(1)
+      ensure
+        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+      end
+
+    end
+
+    def demultiplex!
+      @new_run_dir ||= @run_dir
+
+      begin
+        unless lock_file_present?(@lock_file_name)
+          FileUtils.touch @lock_file_name
+        else
+          logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
+          exit(0)
+        end
+      rescue StandardError => e
+        logger.error "in demultiplexing function:"
+        logger.error e.message
+        logger.error e.backtrace.join("\n")
+        logger.error "exiting with status 1"
+        notify_admins("demultiplex", e)
         exit(1)
       ensure
         FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
