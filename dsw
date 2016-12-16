@@ -11,8 +11,8 @@ class DSW
 
   def run
     program :name, 'dsw'
-    program :version, '0.0.1'
-    program :description, 'Deep Seq experiments backup workflow'
+    program :version, '0.0.3'
+    program :description, 'Deep Seq experiments post-processing workflow'
 
     command :forbid do |c|
       c.syntax = 'dsw forbid [options]'
@@ -93,8 +93,26 @@ class DSW
       end
     end
 
-    run!
+    command :demultiplex do |c|
+      c.syntax = 'dsw demultiplex [options]'
+      c.summary = ''
+      c.description = 'Calls the demultiplexing subroutine (bcl2fastq).'
+      c.option '--rundir DIR', String, 'acts only on the specified directory'
+      c.action do |args, options|
+
+        options.default rundir: nil
+
+        if options.rundir.nil?
+          DeepSeqWorkflow.start(:demultiplex)
+        else
+          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:demultiplex)
+        end
+
+      end
+    end
   end
+
+  run!
 end
 
 DSW.new.run if $0 == __FILE__
