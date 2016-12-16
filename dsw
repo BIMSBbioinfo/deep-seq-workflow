@@ -57,6 +57,7 @@ class DSW
       c.summary = ''
       c.description = 'Calls the duplicity backup subroutine, attempting to add another incremental backup.'
       c.option '--rundir DIR', String, 'acts only on the specified directory'
+      c.option '--singlestep', 'if specified does not progress with the workflow but just makes the remote backup instead'
       c.action do |args, options|
 
         options.default rundir: nil
@@ -64,7 +65,11 @@ class DSW
         if options.rundir.nil?
           DeepSeqWorkflow.start(:duplicity)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity)
+          if options.singlestep
+            DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity, {single_step: true})
+          else
+            DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity)
+          end
         end
 
       end

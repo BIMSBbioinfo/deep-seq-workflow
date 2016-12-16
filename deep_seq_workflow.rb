@@ -6,7 +6,8 @@ require 'find'
 require 'logger'
 require 'net/smtp'
 require 'yaml'
-#require 'shellwords'
+# TODO put all the mail sending methods to another dedicated class
+#require 'mailer'
 
 ChildProcess.posix_spawn = true
 
@@ -18,6 +19,9 @@ module DeepSeqWorkflow
   SAFE_LOCATION_DIR = File.join(PREFIX, 'data', 'bc_copy')
   SAMPLE_SHEETS_DIR = File.join(PREFIX, 'data', 'basecalls', 'sample_sheets')
   DEBUG = false
+  # XXX should go to a mailer class
+  EVERYBODY = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de"]
+  ADMINS = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
 
   def self.start(step)
     Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
@@ -41,8 +45,15 @@ module DeepSeqWorkflow
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
       @log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.log")
+
+      # Error lock file, needs to be deleted by hand for the workflow to resume
+      @error_file_name = "#{@run_dir}.err"
+      # Skip lock file, makes the workflow skip one turn to check for Illumina's weird
+      # way of notifying the user about (some) errors.
+      @skip_file_name = "#{@run_dir}.skip"
     end
-    
+
+    # Get rid of some log noise.
     def to_yaml_properties
       instance_variables - [:@logger]
     end
@@ -64,7 +75,17 @@ module DeepSeqWorkflow
       @logger
     end
 
+    def error?
+      File.exists?(@error_file_name)
+    end
+
+    def skip?
+      File.exists?(@skip_file_name)
+    end
+
     # Has the sequencer finished its task?
+    # XXX apparently Illumina uses two files to mark the end of an experiment,
+    # cfr the 'archive!' subroutine for details.
     def seq_complete?
       File.exists?(File.join(@run_dir, 'RTAComplete.txt'))
     end
@@ -100,18 +121,25 @@ module DeepSeqWorkflow
     # This is the function that kicks the workflow going.
     # Takes a step name from a list of allowed names and start the workflow
     # from there.
-    def run_from(step)
-      if ALLOWED_STEP_NAMES.include?(step)
-        logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
-        logger.info self.to_yaml
-        send("#{step}!")
-        logger.info "[workflow_end] End of deep seq data workflow."
-      else
-        # illegal step parameter specified: notify and exit
-        logger.error "Illegal step parameter specified: #{step}"
-        logger.error "exiting with status 1"
-        notify_admins('illegal_step')
-        exit(1)
+    def run_from(step, options =nil)
+      # Error lock file presence vincit omnia
+      unless error?
+        if ALLOWED_STEP_NAMES.include?(step)
+          logger.info "[workflow_start] Starting deep seq data workflow from step: '#{step}'"
+          logger.info self.to_yaml
+          if options.nil?
+            send("#{step}!")
+          else
+            send("#{step}!", options)
+          end
+          logger.info "[workflow_end] End of deep seq data workflow."
+        else
+          # illegal step parameter specified: notify and exit
+          logger.error "Illegal step parameter specified: #{step}"
+          logger.error "exiting with status 1"
+          notify_admins('illegal_step')
+          exit(1)
+        end
       end
     end
 
@@ -216,21 +244,54 @@ module DeepSeqWorkflow
 
             unless File.directory?(@new_run_dir)
 
-              # Move dir to final location and link back to /data/basecalls
-              FileUtils.mv @run_dir, @new_run_dir
-              logger.info "#{@run_dir} moved to #{@new_run_dir}"
-             
-              File.chmod 0755, @new_run_dir
-              logger.info "Changed permissions for #{@new_run_dir} to 0755"
+              # We need to skip at least one cron cycle (30') because the (new) Illumina sequencers
+              # may write additional files after RTAComplete.txt if errors were
+              # detected during the run.
+              # The presence of @skip_file_name will tell us that we need to skip the rundir
+              # and the check for SequencingComplete will determine if we can further progress
+              # or halt.
 
-              FileUtils.ln_s @new_run_dir, BASECALL_DIR
-              logger.info "Aliased #{@new_run_dir} to #{BASECALL_DIR}"
+              # skip "lock" does not exist, create it and skip
+              unless skip?
+                FileUtils.touch @skip_file_name
+                logger.info "Skipping the turn to check for run errors"
+                exit(1)
+              else
+
+                # If the skip "lock" exists check for SequencingComplete.txt:
+                # - if it is there => errors occurred during the seq run => notify and abort
+                # - if it is not there => delete lock and resume workflow
+                # In case errors are detected, an error lock file is written to disk and the
+                # rundir is exluded from the workflow until that file is deleted.
+
+                if File.exits?(File.join(@run_dir, "SequencingComplete.txt"))
+                  FileUtils.touch @error_file_name
+                  logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{@run_dir}/Logs"
+
+                  notify_run_errors(EVERYBODY)
+                  exit(0)
+                else
+                  FileUtils.rm @skip_file_name
+
+                  # Move dir to final location and link back to /data/basecalls
+                  FileUtils.mv @run_dir, @new_run_dir
+                  logger.info "#{@run_dir} moved to #{@new_run_dir}"
+
+                  File.chmod 0755, @new_run_dir
+                  logger.info "Changed permissions for #{@new_run_dir} to 0755"
+
+                  FileUtils.ln_s @new_run_dir, BASECALL_DIR
+                  logger.info "Aliased #{@new_run_dir} to #{BASECALL_DIR}"
+
+                  # guess what
+                  duplicity!
+                end
+
+              end
 
             else
               raise DuplicateRunError("Duplicate run name detected (#{@run_name})")
             end
-
-            duplicity!
 
           else
             logger.warn "Sequencing still running, just sync'ing."
@@ -259,7 +320,12 @@ module DeepSeqWorkflow
     # Moreover this function employs another lock file in order to track the
     # actual duplicity process execution.
     #
-    def duplicity!
+    def duplicity!(options ={})
+      # this is just some idiom to declare some set of default options for the method
+      # and adding whaterver overridden value comes down from the user.
+      default_options = { single_step: false }
+      default_options.merge!(options)
+
       @new_run_dir ||= @run_dir
 
       duplicity_lock = "#{@new_run_dir}.duplicity.lock"
@@ -280,6 +346,8 @@ module DeepSeqWorkflow
             local_duplicity_cache = File.join(BASECALL_DIR, ".archive")
 
             # Default set of flag/value pairs
+            # the final line joins key-value pairs with a '=' char 
+            # i.e. '--ssh-backend=pexpect' and returns a list of such strings.
             duplicity_flags = {
               '--ssh-backend': 'pexpect',
               '--asynchronous-upload': nil,
@@ -288,14 +356,15 @@ module DeepSeqWorkflow
               '--name': @run_name,
               '--no-encryption': nil,
               '--tempdir': '/tmp',
+              '--exclude': File.join(@new_run_dir, 'demultiplexed_data'),
               '--verbosity': 8
             }.collect{ |kv| kv.compact.join('=') }
-          
+
             # The actual command line string being built
             cmd_line = ['duplicity', 'full']
             cmd_line += duplicity_flags
             cmd_line += [@new_run_dir,
-              "sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
+                         "sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
 
             log_file = File.open(log_file_name, 'a')
 
@@ -304,11 +373,22 @@ module DeepSeqWorkflow
 
             # Sub-process creation (see https://github.com/jarib/childprocess)
             duplicity_proc = ChildProcess.build(*cmd_line)
+
             # Detach it from the parent
             duplicity_proc.leader = true
-            duplicity_proc.detach = true
+
+            # XXX probably messes up the wait call later on.
+            # duplicity_proc.detach = true
+
             # Assign output streams to the log file
             duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
+
+            # Start the data demultiplexing if all the conditions are met
+            unless default_options[:single_step]
+              if File.exists?(File.join(SAMPLE_SHEETS_DIR, "#{@run_name}.csv"))
+                fork { demultiplex! }
+              end
+            end
 
             FileUtils.touch duplicity_lock
 
@@ -318,15 +398,16 @@ module DeepSeqWorkflow
             duplicity_proc.wait
 
             if duplicity_proc.exit_code == 0
-              # Remove duplicity-specific lock only on success
+              # Remove our duplicity-specific lock only on success
               FileUtils.rm duplicity_lock
               logger.info "Duplicity successfully completed a remote backup."
 
               log_file.close if log_file
               FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
-              
-              # Call next step
-              filter_data!
+
+              # Call next step if allowed
+              # XXX check if some of the filtered data is needed by the demultiplexing step
+              filter_data! unless default_options[:single_step]
             else
               raise DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{log_file_name}' for details.")
             end
@@ -385,9 +466,9 @@ module DeepSeqWorkflow
           ## restore users' access to sequencing files
           Find.find(@new_run_dir) do |path|
             if File.directory?(path)
-              File.chmod 0744, path
-            else
               File.chmod 0755, path
+            else
+              File.chmod 0744, path
             end
           end
 
@@ -417,12 +498,63 @@ module DeepSeqWorkflow
     def demultiplex!
       @new_run_dir ||= @run_dir
 
+      demultiplexed_data_dir = File.join(@new_run_dir, 'demultiplexed_data')
+      dmtpx_lock = "#{@new_run_dir}.dmtpx.lock"
+      log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.dmtpx.log")
+
       begin
-        unless lock_file_present?(@lock_file_name)
-          FileUtils.touch @lock_file_name
+        unless lock_file_present?(dmtpx_lock)
+          FileUtils.mkdir(demultiplexed_data_dir) unless File.directory?(demultiplexed_data_dir)
+
+
+          # Default set of flag/value pairs
+          dmtpx_flags = {
+            '-r': 1,
+            '-d': 1,
+            '-p': 1,
+            '-w': 1,
+            '--runfolder-dir': @new_run_dir,
+            '--output-dir': demultiplexed_data_dir,
+            '--sample-sheet': File.join(SAMPLE_SHEETS_DIR, "#{@run_name}.csv")
+          }.collect{ |kv| kv.compact.join('=') }
+
+          # The actual command line string being built
+          cmd_line = ['/gnu/var/guix/profiles/custom/bimsb/bin/bcl2fastq']
+          cmd_line += dmtpx_flags
+
+          log_file = File.open(log_file_name, 'a')
+
+          # /gnu/var/guix/profiles/custom/bimsb/bin/bcl2fastq -r 1 -d 1 -p 1 -w 1 --runfolder-dir /data/basecalls/160713_SN471_0225_A_C8J12ACXX_MIXED --output-dir /data/meyer/data/fly_project/rnaseq/ali_smallRNA --sample-sheet sheet1.csv
+          logger.info "bcl2fastq command line:"
+          logger.info cmd_line.join(' ')
+
+          # Sub-process creation (see https://github.com/jarib/childprocess)
+          dmtpx_proc = ChildProcess.build(*cmd_line)
+          # Detach it from the parent
+          dmtpx_proc.leader = true
+          # dmtpx_proc.detach = true
+          # Assign output streams to the log file
+          dmtpx_proc.io.stdout = dmtpx_proc.io.stderr = log_file
+
+          FileUtils.touch dmtpx_lock
+
+          # Start execution and wait for termination
+          dmtpx_proc.start
+          logger.info "Started bcl2fastq demultiplexing procedure. See '#{log_file_name}' for details."
+          # Def not wait for this to end for now (to be defined)
+          dmtpx_proc.wait
+
+          if dmtpx_proc.exit_code == 0
+            # Remove dmtpx-specific lock only on success
+            FileUtils.rm dmtpx_lock
+            logger.info "bcl2fastq successfully demultiplexed the sequencing data."
+
+            log_file.close if log_file
+          else
+            raise DemultiplexProcessError.new("'bcl2fastq' exited with nonzero status\ncheck '#{log_file_name}' for details.")
+          end
         else
-          logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
-          exit(0)
+          raise DemultiplexLockError.new("bcl2fastq lock file is still present! Aborting operation.")
         end
       rescue StandardError => e
         logger.error "in demultiplexing function:"
@@ -432,20 +564,19 @@ module DeepSeqWorkflow
         notify_admins("demultiplex", e)
         exit(1)
       ensure
-        FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
+        log_file.close if log_file
       end
 
     end
 
     def notify_admins(op, error =nil)
       unless DEBUG
-        admins = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
-        admins.each do |adm|
+        ADMINS.each do |adm|
           msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
 To: #{adm}
 Subject: [Deep Seq workflow] Error: #{op}
 Date: #{Time.now}
-          
+
 Error code: #{op}
 Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
 Host: #{HOSTNAME}
@@ -474,19 +605,21 @@ See #{@log_file_name} for details.\n|
 
     def notify_run_finished
       unless DEBUG
-        users = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de"]
+        users = EVERYBODY
         users.each do |user|
           msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
 To: #{user}
 Subject: [Deep Seq workflow] Processing of run #{@run_name} finished
 Date: #{Time.now}
-          
+
 Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
+Access for the users has been restored.
+Demultiplexing may still be underway.
 
 ---\ndsw\n|
 
           Net::SMTP.start('localhost', 25) do |smtp|
-            smtp.send_message msg, 'dsw@mdc-berlin.net', adm
+            smtp.send_message msg, 'dsw@mdc-berlin.net', user
           end
         end
       else
@@ -494,11 +627,43 @@ Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
       end
 
     end
+
+    def notify_run_error(recipients)
+      unless DEBUG
+        recipients.each do |rcp|
+          msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
+To: #{rcp}
+Subject: [Deep Seq workflow] Errors during sequencing run detected
+Date: #{Time.now}
+
+During run:
+
+  #{@run_name}
+
+errors were detected by the sequencing software; please check the log files:
+
+  #{@new_run_dir.nil? ? @run_dir : @new_run_dir}/Logs/Error_*.log
+
+and contact the vendor if needed.
+
+---\ndsw|
+
+          Net::SMTP.start('localhost', 25) do |smtp|
+            smtp.send_message msg, 'dsw@mdc-berlin.net', rcp
+          end
+        end
+      else
+        logger.debug "Run error detected"
+      end
+    end
+
   end
 
   class FindProcessError < StandardError; end
+  class RsyncProcessError < StandardError; end
   class DuplicityProcessError < StandardError; end
   class DuplicityLockError < StandardError; end
-  class RsyncProcessError < StandardError; end
+  class DemultiplexProcessError < StandardError; end
+  class DemultiplexLockError < StandardError; end
   class DuplicateRunError < StandardError; end
 end
