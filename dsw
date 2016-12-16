@@ -110,9 +110,9 @@ class DSW
 
       end
     end
-  end
 
   run!
+  end
 end
 
 DSW.new.run if $0 == __FILE__
