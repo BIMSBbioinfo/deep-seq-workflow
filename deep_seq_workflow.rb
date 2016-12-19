@@ -508,18 +508,15 @@ module DeepSeqWorkflow
 
 
           # Default set of flag/value pairs
-          dash_flags = {
+          dmtpx_flags = {
             '-r': 1,
             '-d': 1,
             '-p': 1,
-            '-w': 1
-          }.collect{ |kv| kv.compact.join(' ') }
-
-          double_dash_flags = {
+            '-w': 1,
             '--runfolder-dir': @new_run_dir,
             '--output-dir': demultiplexed_data_dir,
             '--sample-sheet': File.join(SAMPLE_SHEETS_DIR, "#{@run_name}.csv")
-          }.collect{ |kv| kv.compact.join('=') }
+          }.collect{ |kv| kv.compact.collect(&:to_s) }.flatten
 
           # The actual command line string being built
           cmd_line = ['bcl2fastq']
