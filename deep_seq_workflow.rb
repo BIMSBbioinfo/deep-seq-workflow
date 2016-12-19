@@ -520,8 +520,7 @@ module DeepSeqWorkflow
 
           # The actual command line string being built
           cmd_line = ['bcl2fastq']
-          cmd_line += dash_flags
-          cmd_line += double_dash_flags
+          cmd_line += dmtpx_flags
 
           log_file = File.open(log_file_name, 'a')
 
