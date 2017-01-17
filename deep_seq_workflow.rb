@@ -6,6 +6,7 @@ require 'find'
 require 'logger'
 require 'net/smtp'
 require 'yaml'
+require 'shellwords'
 # TODO put all the mail sending methods to another dedicated class
 #require 'mailer'
 
@@ -25,7 +26,7 @@ module DeepSeqWorkflow
 
   def self.start(step)
     Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
-      task = DirTask.new(run_dir)
+      task = DirTask.new(Shellwords.escape(run_dir))
 
       if step == :forbid
         # different, faster cronjob, this way we get less log noise
@@ -269,7 +270,7 @@ module DeepSeqWorkflow
                   logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{@run_dir}/Logs"
 
                   notify_run_errors(EVERYBODY)
-                  exit(0)
+                  exit(1)
                 else
                   FileUtils.rm @skip_file_name
 
