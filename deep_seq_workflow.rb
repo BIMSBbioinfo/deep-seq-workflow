@@ -265,7 +265,7 @@ module DeepSeqWorkflow
                 # In case errors are detected, an error lock file is written to disk and the
                 # rundir is exluded from the workflow until that file is deleted.
 
-                if File.exits?(File.join(@run_dir, "SequencingComplete.txt"))
+                if File.exists?(File.join(@run_dir, "SequencingComplete.txt"))
                   FileUtils.touch @error_file_name
                   logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{@run_dir}/Logs"
 
