@@ -113,9 +113,7 @@ module DeepSeqWorkflow
         logger.error "checking lock file '#{lock_file_name}' presence:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
         notify_admins('lock_file_check', e)
-        exit(1)
       end
     end
 
@@ -137,9 +135,7 @@ module DeepSeqWorkflow
         else
           # illegal step parameter specified: notify and exit
           logger.error "Illegal step parameter specified: #{step}"
-          logger.error "exiting with status 1"
           notify_admins('illegal_step')
-          exit(1)
         end
       end
     end
@@ -165,9 +161,7 @@ module DeepSeqWorkflow
         logger.error "while forbidding access to deep seq data:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
         notify_admins('forbid_dir', e)
-        exit(1)
       ensure
         FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
       end
@@ -209,9 +203,7 @@ module DeepSeqWorkflow
         logger.error "#{e.class} encountered while performing the sync'ing step"
         logger.error e.message
         logger.error "trace:\n#{e.backtrace.join("\n")}"
-        logger.error "exiting with status 1"
         notify_admins('sync', e)
-        exit(1)
       ensure
         FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
@@ -255,8 +247,7 @@ module DeepSeqWorkflow
               # skip "lock" does not exist, create it and skip
               unless skip?
                 FileUtils.touch @skip_file_name
-                logger.info "Skipping the turn to check for run errors"
-                exit(1)
+                raise SkipException
               else
 
                 # If the skip "lock" exists check for SequencingComplete.txt:
@@ -267,10 +258,7 @@ module DeepSeqWorkflow
 
                 if File.exists?(File.join(@run_dir, "SequencingComplete.txt"))
                   FileUtils.touch @error_file_name
-                  logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{@run_dir}/Logs"
-
-                  notify_run_errors(EVERYBODY)
-                  exit(1)
+                  raise SequencingError
                 else
                   FileUtils.rm @skip_file_name
 
@@ -297,20 +285,22 @@ module DeepSeqWorkflow
           else
             logger.warn "Sequencing still running, just sync'ing."
             sync!
-            exit(0)
           end
+        rescue SkipException => ske
+          logger.info "Skipping the turn to check for run errors"
+        rescue SequencingError => seqe
+          logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{@run_dir}/Logs"
+          notify_run_errors(EVERYBODY)
         rescue StandardError => e
           logger.error "while performing the archiviation step:"
           logger.error e.message
           logger.error e.backtrace.join("\n")
-          logger.error "exiting with status 1"
           notify_admins('archive', e)
+        ensure
           FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
-          exit(1)
         end
       else
         logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
-        exit(0)
       end
     end
 
@@ -420,16 +410,13 @@ module DeepSeqWorkflow
           logger.error "in duplicity backup function:"
           logger.error e.message
           logger.error e.backtrace.join("\n")
-          logger.error "exiting with status 1"
           notify_admins("duplicity_function", e)
-          exit(1)
         ensure
           log_file.close if log_file
           FileUtils.rm @lock_file_name if lock_file_present?(@lock_file_name)
         end
       else
         logger.warn "Main lock file \"#{@lock_file_name}\" still there, skipping."
-        exit(0)
       end
     end
 
@@ -481,15 +468,12 @@ module DeepSeqWorkflow
 
         else
           logger.warn "Lock file \"#{@lock_file_name}\" still there, skipping."
-          exit(0)
         end
       rescue StandardError => e
         logger.error "in filter data function:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
         notify_admins("filter_data", e)
-        exit(1)
       ensure
         FileUtils.rm @lock_file_name if File.exists?(@lock_file_name)
       end
@@ -561,9 +545,7 @@ module DeepSeqWorkflow
         logger.error "in demultiplexing function:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        logger.error "exiting with status 1"
         notify_admins("demultiplex", e)
-        exit(1)
       ensure
         log_file.close if log_file
       end
@@ -667,4 +649,6 @@ and contact the vendor if needed.
   class DemultiplexProcessError < StandardError; end
   class DemultiplexLockError < StandardError; end
   class DuplicateRunError < StandardError; end
+  class SkipException < StandardError; end
+  class SequencingError < StandardError; end
 end
