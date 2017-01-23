@@ -7,6 +7,7 @@ require 'logger'
 require 'net/smtp'
 require 'yaml'
 require 'shellwords'
+
 # TODO put all the mail sending methods to another dedicated class
 #require 'mailer'
 
@@ -26,7 +27,7 @@ module DeepSeqWorkflow
 
   def self.start(step)
     Dir.glob(File.join(BASECALL_DIR, '.seq_*', '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
-      task = DirTask.new(Shellwords.escape(run_dir))
+      task = DirTask.new(run_dir)
 
       if step == :forbid
         # different, faster cronjob, this way we get less log noise
@@ -185,7 +186,10 @@ module DeepSeqWorkflow
         rsync_type = seq_complete? ? 'final' : 'partial'
         logger.info "Starting #{rsync_type} rsync..."
 
-        Rsync.run("#{@run_dir}/", File.join(SAFE_LOCATION_DIR, @run_name), '-raP') do |result|
+        source_dir = Shellwords.escape("#{@run_dir}/")
+        dest_dir = Shellwords.escape(File.join(SAFE_LOCATION_DIR, @run_name))
+
+        Rsync.run(source_dir, dest_dir, '-raP') do |result|
 
           if result.success?
             result.changes.each do |change|
@@ -430,7 +434,9 @@ module DeepSeqWorkflow
           FileUtils.touch @lock_file_name
 
           # The find process command line
-          flist_cmd = %Q[ find #{@new_run_dir} -name '*' | \
+          find_dir = Shellwords.escape(@new_run_dir)
+
+          flist_cmd = %Q[ find #{find_dir} -name '*' | \
             egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq']
 
           # Runs the above command and saves the output in 'file_list';
