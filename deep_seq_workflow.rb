@@ -459,7 +459,7 @@ module DeepSeqWorkflow
 egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq']
 
           logger.info "Find command line:"
-          logger.info cmd_line
+          logger.info flist_cmd
 
           # Runs the above command and saves the output in 'file_list';
           # reports eventual errors.
