@@ -455,13 +455,16 @@ module DeepSeqWorkflow
           # The find process command line
           find_dir = Shellwords.escape(@new_run_dir)
 
-          flist_cmd = %Q[ find #{find_dir} -name '*' | \
-            egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq']
+          flist_cmd = %Q[find #{find_dir} -name '*' | \
+egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Converted-to-qseq']
+
+          logger.info "Find command line:"
+          logger.info cmd_line
 
           # Runs the above command and saves the output in 'file_list';
           # reports eventual errors.
           file_list = %x[ #{flist_cmd} ]
-          raise FindProcessError.new("'find' child process exited with nonzero status") if $?.exitstatus != 0
+          raise FindProcessError.new("'find' or 'grep' child processes exited with error status") if $?.exitstatus > 1
 
           file_list = file_list.split("\n")
 
