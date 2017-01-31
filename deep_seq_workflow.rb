@@ -343,23 +343,42 @@ module DeepSeqWorkflow
             # Default set of flag/value pairs
             # the final line joins key-value pairs with a '=' char 
             # i.e. '--ssh-backend=pexpect' and returns a list of such strings.
-            duplicity_flags = {
-              '--ssh-backend': 'pexpect',
-              '--asynchronous-upload': nil,
-              '--volsize': 1024,
-              '--archive-dir': local_duplicity_cache,
-              '--name': @run_name,
-              '--no-encryption': nil,
-              '--tempdir': '/tmp',
-              '--exclude': File.join(@new_run_dir, 'demultiplexed_data'),
-              '--verbosity': 8
-            }.collect{ |kv| kv.compact.join('=') }
+            if HOSTNAME.match('dm2')
+              duplicity_flags = {
+                '--asynchronous-upload': nil,
+                '--volsize': 1024,
+                '--archive-dir': local_duplicity_cache,
+                '--name': @run_name,
+                '--no-encryption': nil,
+                '--tempdir': '/tmp',
+                '--exclude': File.join(@new_run_dir, 'demultiplexed_data'),
+                '--verbosity': 8
+              }.collect{ |kv| kv.compact.join('=') }
 
-            # The actual command line string being built
-            cmd_line = ['duplicity', 'full']
-            cmd_line += duplicity_flags
-            cmd_line += [@new_run_dir,
-                         "sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
+              # The actual command line string being built
+              cmd_line = ['duplicity', 'full']
+              cmd_line += duplicity_flags
+              cmd_line += [@new_run_dir,
+                           "pexpect+sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
+            else
+              duplicity_flags = {
+                '--ssh-backend': 'pexpect',
+                '--asynchronous-upload': nil,
+                '--volsize': 1024,
+                '--archive-dir': local_duplicity_cache,
+                '--name': @run_name,
+                '--no-encryption': nil,
+                '--tempdir': '/tmp',
+                '--exclude': File.join(@new_run_dir, 'demultiplexed_data'),
+                '--verbosity': 8
+              }.collect{ |kv| kv.compact.join('=') }
+
+              # The actual command line string being built
+              cmd_line = ['duplicity', 'full']
+              cmd_line += duplicity_flags
+              cmd_line += [@new_run_dir,
+                           "sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{@run_name}"]
+            end
 
             log_file = File.open(log_file_name, 'a')
 
