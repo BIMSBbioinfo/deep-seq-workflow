@@ -47,6 +47,7 @@ module DeepSeqWorkflow
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
       @log_file_name = File.join(BASECALL_DIR, ".log", "#{@run_name}.log")
+      @machine = `ls -ld #{@run_dir}`.split("\s")[2]
 
       # Error lock file, needs to be deleted by hand for the workflow to resume
       @error_file_name = "#{@run_dir}.err"
@@ -89,7 +90,11 @@ module DeepSeqWorkflow
     # XXX apparently Illumina uses two files to mark the end of an experiment,
     # cfr the 'archive!' subroutine for details.
     def seq_complete?
-      File.exists?(File.join(@run_dir, 'RTAComplete.txt'))
+      if ['seq_NS500648', 'seq_NB501326'].include?(@machine)
+        File.exists?(File.join(@run_dir, 'RunCompletionStatus.xml'))
+      else
+        File.exists?(File.join(@run_dir, 'RTAComplete.txt'))
+      end
     end
 
     # Did we already forbid access to the sequencing data?
