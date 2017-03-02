@@ -492,6 +492,8 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
               File.chmod 0744, path
             end
           end
+          FileUtils.chown 'CF_Seq', 'deep_seq', File.join(BASECALL_DIR, @run_name)
+          FileUtils.chown_R 'CF_Seq', 'deep_seq', @new_run_dir
 
           # Cleaning up the second copy of the data since the backup completed successfully
           logger.info "Removing backup from: #{File.join(SAFE_LOCATION_DIR, @run_name)}"
