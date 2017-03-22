@@ -2,7 +2,7 @@ class Mailer
   EVERYBODY = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de"]
   ADMINS = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
 
-  def notify_admins(op, error =nil)
+  def self.notify_admins(op, error =nil)
     unless DEBUG
       ADMINS.each do |adm|
         msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>
@@ -36,7 +36,7 @@ See #{@log_file_name} for details.\n|
     end
   end
 
-  def notify_run_finished
+  def self.notify_run_finished
     unless DEBUG
       users = EVERYBODY
       users.each do |user|
@@ -47,7 +47,7 @@ Date: #{Time.now}
 
 Run dir: #{@new_run_dir.nil? ? @run_dir : @new_run_dir}
 Access for the users has been restored.
-Demultiplexing may still be underway.
+The backup procedure and demultiplexing may still be underway.
 
 ---\ndsw\n|
 
@@ -61,7 +61,7 @@ Demultiplexing may still be underway.
 
   end
 
-  def notify_run_error(recipients)
+  def self.notify_run_error(recipients)
     unless DEBUG
       recipients.each do |rcp|
         msg = %Q|From: deep_seq_workflow <dsw@mdc-berlin.net>

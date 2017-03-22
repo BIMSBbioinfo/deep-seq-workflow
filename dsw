@@ -3,15 +3,14 @@
 require 'rubygems'
 require 'bundler/setup'
 require 'commander'
-require_relative 'deep_seq_workflow'
+require_relative 'lib/workflow'
 
 class DSW
   include Commander::Methods
-  include DeepSeqWorkflow
 
   def run
     program :name, 'dsw'
-    program :version, '0.0.3'
+    program :version, '0.1.0'
     program :description, 'Deep Seq experiments post-processing workflow'
 
     command :forbid do |c|
@@ -25,9 +24,9 @@ class DSW
         options.default rundir: nil
 
         if options.rundir.nil?
-          DeepSeqWorkflow.start(:forbid)
+          Workflow.start(:forbid)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).forbid!
+          Sequencer.new(options.rundir).forbid!
         end
 
       end
@@ -44,9 +43,9 @@ class DSW
         options.default rundir: nil
 
         if options.rundir.nil?
-          DeepSeqWorkflow.start(:archive)
+          Workflow.start(:archive)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:archive)
+          Sequencer.new(options.rundir).run_from(:archive)
         end
 
       end
@@ -63,12 +62,12 @@ class DSW
         options.default rundir: nil
 
         if options.rundir.nil?
-          DeepSeqWorkflow.start(:duplicity)
+          Workflow.start(:duplicity)
         else
           if options.singlestep
-            DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity, {single_step: true})
+            Sequencer.new(options.rundir).run_from(:duplicity, {single_step: true})
           else
-            DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:duplicity)
+            Sequencer.new(options.rundir).run_from(:duplicity)
           end
         end
 
@@ -85,9 +84,9 @@ class DSW
         options.default rundir: nil
 
         if options.rundir.nil?
-          DeepSeqWorkflow.start(:filter_data)
+          Workflow.start(:filter_data)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:filter_data)
+          Sequencer.new(options.rundir).run_from(:filter_data)
         end
 
       end
@@ -103,9 +102,9 @@ class DSW
         options.default rundir: nil
 
         if options.rundir.nil?
-          DeepSeqWorkflow.start(:demultiplex)
+          Workflow.start(:demultiplex)
         else
-          DeepSeqWorkflow::DirTask.new(options.rundir).run_from(:demultiplex)
+          Sequencer.new(options.rundir).run_from(:demultiplex)
         end
 
       end

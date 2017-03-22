@@ -1,4 +1,4 @@
-module DSWErrors
+module Errors
   class FindProcessError < StandardError; end
   class RsyncProcessError < StandardError; end
   class DuplicityProcessError < StandardError; end
