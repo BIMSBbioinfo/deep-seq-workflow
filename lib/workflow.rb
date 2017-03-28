@@ -6,6 +6,7 @@ require 'logger'
 require 'net/smtp'
 require 'yaml'
 require 'shellwords'
+require 'csv'
 
 ChildProcess.posix_spawn = true
 
@@ -22,7 +23,17 @@ class Workflow
 
   def self.start(step)
     Dir.glob(File.join(Conf.global_conf[:basecall_dir], Conf.global_conf[:seq_dir_regexp], '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
-      manager = Sequencer.new(run_dir)
+      begin
+        manager = Sequencer.new(run_dir)
+      rescue Errors::EmptyRunDirPathError => erdpe
+        logger.error("rundir path parameter is empty ('#{erdpe.message}'); Exiting with status 1.")
+        Mailer.notify_admins('workflow_start', erdpe)
+        exit(1)
+      rescue Errors::UnknownMachineTypeError => umte
+        logger.error("Unknown machine type extrapolated from directory name: '#{umte.message}'; Exiting with status 1.")
+        Mailer.notify_admins('workflow_start', umte)
+        exit(1)
+      end
 
       if step == :forbid
         # different, faster cronjob, this way we get less log noise

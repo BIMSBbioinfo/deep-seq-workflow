@@ -9,4 +9,5 @@ module Errors
   class SkipException < StandardError; end
   class SequencingError < StandardError; end
   class UnknownMachineTypeError < StandardError; end
+  class EmptyRunDirPathError < StandardError; end
 end

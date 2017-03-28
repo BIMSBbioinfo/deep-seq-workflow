@@ -7,6 +7,7 @@ class Conf
   SEQ_DIR_REGEXP = '.seq_*'
   SAFE_LOCATION_DIR = File.join(PREFIX, 'data', 'bc_copy')
   SAMPLE_SHEETS_DIR = File.join(PREFIX, 'data', 'basecalls', 'sample_sheets')
+  RESTORE_DIR = File.join(PREFIX, 'data', 'basecalls', '.restore')
   DEBUG = false
 
   ZIB_ARCHIVE_USER = "bzpkuntz"
@@ -21,6 +22,7 @@ class Conf
       seq_dir_regexp: SEQ_DIR_REGEXP,
       safe_location_dir: SAFE_LOCATION_DIR,
       sample_sheets_dir: SAMPLE_SHEETS_DIR,
+      restore_dir: RESTORE_DIR,
       zib_archive_user: ZIB_ARCHIVE_USER,
       zib_archive_host: ZIB_ARCHIVE_HOST, 
       zib_archive_dir: ZIB_ARCHIVE_DIR,

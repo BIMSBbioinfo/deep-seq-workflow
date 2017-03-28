@@ -4,27 +4,32 @@ class Sequencer
     :skip_file_name
 
   def initialize(rundir)
-    @run_dir = run_dir
-    @run_name = File.basename(@run_dir)
-    @lock_file_name = "#{@run_dir}.lock"
-    @log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{@run_name}.log")
+    if rundir.empty?
+      raise Errors::EmptyRunDirPathError.new(rundir)
+    else
+      @run_dir = run_dir
+      @run_name = File.basename(@run_dir)
+      @lock_file_name = "#{@run_dir}.lock"
+      @log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{@run_name}.log")
 
-    # Error lock file, needs to be deleted by hand for the workflow to resume
-    @error_file_name = "#{@run_dir}.err"
-    # Skip lock file, makes the workflow skip one turn to check for Illumina's weird
-    # way of notifying the user about (some) errors.
-    @skip_file_name = "#{@run_dir}.skip"
-    Sequencer.select(sn: `ls -ld #{@run_dir}`.split("\s")[2].sub('seq_', ''))
+      # Error lock file, needs to be deleted by hand for the workflow to resume
+      @error_file_name = "#{@run_dir}.err"
+      # Skip lock file, makes the workflow skip one turn to check for Illumina's weird
+      # way of notifying the user about (some) errors.
+      @skip_file_name = "#{@run_dir}.skip"
+      Sequencer.select(sn: `ls -ld #{@run_dir}`.split("\s")[2].sub('seq_', ''))
+    end
   end
 
   def self.select(options)
-    case options[:sb][0]
+    case options[:sn][0]
     when 'M' then MiniSeq.new
     when 'N' then NextSeq.new
     when 'S' then HiSeq.new
     when 'K' then HiSeq.new
+    when 'P' then Pacbio.new
     else
-      raise DSWErrors::UnknowMachineTypeError.new(options[:sb])
+      raise Errors::UnknowMachineTypeError.new(options[:sb])
     end
   end
 
@@ -50,6 +55,10 @@ class Sequencer
       @logger.level = Logger::INFO
     end
     @logger
+  end
+
+  def archive_dir
+    Conf.global_conf[:zib_archive_dir]
   end
 
   def seq_complete?
@@ -82,7 +91,7 @@ class Sequencer
       # TODO check lock file age and send a warning if it is older than a
       # given threshold.
       File.exists?(lfname)
-    rescue StandardError => e
+    rescue => e
       logger.error "checking lock file '#{lfname}' presence:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
@@ -107,7 +116,7 @@ class Sequencer
           end
         end
       end
-    rescue StandardError => e
+    rescue => e
       logger.error "while forbidding access to deep seq data:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
@@ -150,7 +159,7 @@ class Sequencer
         end
       end
 
-    rescue StandardError => e
+    rescue => e
       logger.error "#{e.class} encountered while performing the sync'ing step"
       logger.error e.message
       logger.error "trace:\n#{e.backtrace.join("\n")}"
@@ -224,12 +233,7 @@ class Sequencer
           logger.warn "Sequencing still running, just sync'ing."
           sync!
         end
-      rescue SkipException => ske
-        logger.info "Skipping the turn to check for run errors"
-      rescue SequencingError => seqe
-        logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{run_dir}/Logs"
-        Mailer.notify_run_errors(Mailer::EVERYBODY)
-      rescue StandardError => e
+      rescue => e
         logger.error "while performing the archiviation step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
@@ -269,7 +273,6 @@ class Sequencer
           # Remote backup location access data
           archive_user = Conf.global_conf[:zib_archive_user]
           archive_host = Conf.global_conf[:zib_archive_host]
-          archive_dir  = Conf.global_conf[:zib_archive_dir]
           local_duplicity_cache = File.join(Conf.global_conf[:basecall_dir], ".archive")
 
           # Default set of flag/value pairs
@@ -341,7 +344,7 @@ class Sequencer
         else
           raise DuplicityLockError.new("Duplicity lock file is still present! Aborting workflow.")
         end
-      rescue StandardError => e
+      rescue => e
         logger.error "in duplicity backup function:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
@@ -396,13 +399,108 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       else
         logger.warn "Lock file \"#{lock_file_name}\" still there, skipping."
       end
-    rescue StandardError => e
+    rescue => e
       logger.error "in filter data function:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
       Mailer.notify_admins("filter_data", e)
     ensure
       FileUtils.rm lock_file_name if File.exists?(lock_file_name)
+    end
+
+  end
+
+  # manual restore function
+  def restore!(options ={})
+    default_options = {}
+    default_options.merge!(options)
+
+    # run_name is a field of the Sequencer class so this local var has been named:
+    runname = map_long_name_to_short(options[:run_name])
+    # the above function call will search the map and return the short name
+    # corresponding to the long name provided or return the input untouched
+    # otherwise.
+
+    begin
+      # Duplicity-specific log file
+      dup_log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{runname}.restore.log")
+
+      # Remote backup location access data
+      archive_user = Conf.global_conf[:zib_archive_user]
+      archive_host = Conf.global_conf[:zib_archive_host]
+      local_duplicity_cache = File.join(Conf.global_conf[:basecall_dir], ".archive")
+      dest_dir = File.join(Conf.global_conf[:restore_dir], options[:run_name])
+
+      # Default set of flag/value pairs
+      # the final line joins key-value pairs with a '=' char 
+      # i.e. '--tmpdir=/tmp' and returns a list of such strings.
+      duplicity_flags = {
+        '--archive-dir': local_duplicity_cache,
+        '--name': runname,
+        '--numeric-owner': nil,
+        '--no-encryption': nil,
+        '--tempdir': '/tmp',
+        '--verbosity': 8
+      }.collect{ |kv| kv.compact.join('=') }
+
+      # The actual command line string being built
+      cmd_line = ['duplicity', 'restore']
+      cmd_line += duplicity_flags
+      cmd_line += ["pexpect+sftp://#{archive_user}#{archive_host}/#{archive_dir}/#{runname}",
+                  dest_dir]
+
+      log_file = File.open(dup_log_file_name, 'a')
+
+      logger.info "Duplicity command line:"
+      logger.info cmd_line.join(' ')
+
+      # Sub-process creation (see https://github.com/jarib/childprocess)
+      duplicity_proc = ChildProcess.build(*cmd_line)
+
+      # Detach it from the parent
+      duplicity_proc.leader = true
+
+      # Assign output streams to the log file
+      duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
+
+      FileUtils.touch duplicity_lock
+
+      # Start execution and wait for termination
+      duplicity_proc.start
+      logger.info "Started duplicity remote restore procedure. See '#{dup_log_file_name}' for details."
+      duplicity_proc.wait
+
+      if duplicity_proc.exit_code == 0
+        # Remove our duplicity-specific lock only on success
+        FileUtils.rm duplicity_lock
+        logger.info "Duplicity successfully completed a remote backup."
+
+        log_file.close if log_file
+
+        #notify somebody
+
+      else
+        raise DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
+      end
+
+    rescue => e
+      logger.error "in duplicity restore function:"
+      logger.error e.message
+      logger.error e.backtrace.join("\n")
+      Mailer.notify_admins("duplicity_function1", e)
+    ensure
+      log_file.close if log_file
+    end
+  end
+
+  def map_long_name_to_short(rname)
+    name_map = CSV.read(Conf.global_conf[:map_file_name])
+
+    hit = name_map.find { |m| m[0] == rname }
+    if hit.nil?
+      rname
+    else
+      hit[1]
     end
 
   end

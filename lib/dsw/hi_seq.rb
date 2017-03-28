@@ -38,7 +38,7 @@ class HiSeq < Sequencer
             # skip "lock" does not exist, create it and skip
             unless skip?
               FileUtils.touch task.skip_file_name
-              raise SkipException
+              raise Errors::SkipException
             else
 
               # If the skip "lock" exists check for SequencingComplete.txt:
@@ -49,7 +49,7 @@ class HiSeq < Sequencer
 
               if File.exists?(File.join(task.run_dir, "SequencingComplete.txt"))
                 FileUtils.touch task.error_file_name
-                raise SequencingError
+                raise Errors::SequencingError
               else
                 FileUtils.rm task.skip_file_name
 
@@ -83,19 +83,19 @@ class HiSeq < Sequencer
             end
 
           else
-            raise DuplicateRunError("Duplicate run name detected (#{task.run_name})")
+            raise Errors::DuplicateRunError("Duplicate run name detected (#{task.run_name})")
           end
 
         else
           logger.warn "Sequencing still running, just sync'ing."
           sync!
         end
-      rescue SkipException => ske
+      rescue Errors::SkipException
         logger.info "Skipping the turn to check for run errors"
-      rescue SequencingError => seqe
+      rescue Errors::SequencingError
         logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{task.run_dir}/Logs"
         Mailer.notify_run_errors(Mailer::EVERYBODY)
-      rescue StandardError => e
+      rescue => e
         logger.error "while performing the archiviation step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
