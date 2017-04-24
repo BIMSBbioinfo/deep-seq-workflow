@@ -11,33 +11,33 @@ class HiSeq < Sequencer
   # Otherwise it calls the sync'ing function and exits (partial sync)
   #
   def archive!
-    unless lock_file_present?(task.lock_file_name)
+    unless lock_file_present?(lock_file_name)
       begin
-        FileUtils.touch task.lock_file_name
+        FileUtils.touch lock_file_name
 
         if seq_complete? && dir_forbidden?
           sync!
 
-          year = "20#{task.run_name[0..1]}"
-          local_archive_dir = File.join(BASECALL_DIR, year)
+          year = "20#{run_name[0..1]}"
+          local_archive_dir = File.join(Conf.global_conf[:basecall_dir], year)
 
           # final rsync done
           FileUtils.mkdir local_archive_dir unless File.directory?(local_archive_dir)
 
-          task.new_run_dir = File.join(local_archive_dir, task.run_name) 
+          new_run_dir = File.join(local_archive_dir, run_name) 
 
-          unless File.directory?(task.new_run_dir)
+          unless File.directory?(new_run_dir)
 
             # We need to skip at least one cron cycle (30') because the (new) Illumina sequencers
             # may write additional files after RTAComplete.txt if errors were
             # detected during the run.
-            # The presence of task.skip_file_name will tell us that we need to skip the rundir
+            # The presence of skip_file_name will tell us that we need to skip the rundir
             # and the check for SequencingComplete will determine if we can further progress
             # or halt.
 
             # skip "lock" does not exist, create it and skip
             unless skip?
-              FileUtils.touch task.skip_file_name
+              FileUtils.touch skip_file_name
               raise Errors::SkipException
             else
 
@@ -47,21 +47,21 @@ class HiSeq < Sequencer
               # In case errors are detected, an error lock file is written to disk and the
               # rundir is exluded from the workflow until that file is deleted.
 
-              if File.exists?(File.join(task.run_dir, "SequencingComplete.txt"))
-                FileUtils.touch task.error_file_name
+              if File.exists?(File.join(run_dir, "SequencingComplete.txt"))
+                FileUtils.touch error_file_name
                 raise Errors::SequencingError
               else
-                FileUtils.rm task.skip_file_name
+                FileUtils.rm skip_file_name
 
                 # Move dir to final location and link back to /data/basecalls
-                FileUtils.mv task.run_dir, task.new_run_dir
-                logger.info "#{task.run_dir} moved to #{task.new_run_dir}"
+                FileUtils.mv run_dir, new_run_dir
+                logger.info "#{run_dir} moved to #{new_run_dir}"
 
-                File.chmod 0755, task.new_run_dir
-                logger.info "Changed permissions for #{task.new_run_dir} to 0755"
+                File.chmod 0755, new_run_dir
+                logger.info "Changed permissions for #{new_run_dir} to 0755"
 
-                FileUtils.ln_s task.new_run_dir, BASECALL_DIR
-                logger.info "Aliased #{task.new_run_dir} to #{BASECALL_DIR}"
+                FileUtils.ln_s new_run_dir, Conf.global_conf[:basecall_dir]
+                logger.info "Aliased #{new_run_dir} to #{Conf.global_conf[:basecall_dir]}"
 
                 ## restore users' access to sequencing files
                 Find.find(new_run_dir) do |path|
@@ -74,7 +74,7 @@ class HiSeq < Sequencer
                 FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
                 FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
-                Mailer.notify_run_finished
+                Mailer.notify_run_finished(self)
 
                 # guess what
                 duplicity!
@@ -83,7 +83,7 @@ class HiSeq < Sequencer
             end
 
           else
-            raise Errors::DuplicateRunError("Duplicate run name detected (#{task.run_name})")
+            raise Errors::DuplicateRunError("Duplicate run name detected (#{run_name})")
           end
 
         else
@@ -93,18 +93,18 @@ class HiSeq < Sequencer
       rescue Errors::SkipException
         logger.info "Skipping the turn to check for run errors"
       rescue Errors::SequencingError
-        logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{task.run_dir}/Logs"
-        Mailer.notify_run_errors(Mailer::EVERYBODY)
+        logger.error "Errors were detected during the sequencing run; please refer to the log file(s) in: #{run_dir}/Logs"
+        Mailer.notify_run_errors(self, Mailer::EVERYBODY)
       rescue => e
         logger.error "while performing the archiviation step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        Mailer.notify_admins('archive', e)
+        Mailer.notify_admins(self, 'archive', e)
       ensure
-        FileUtils.rm task.lock_file_name if lock_file_present?(task.lock_file_name)
+        FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
       end
     else
-      logger.warn "Lock file \"#{task.lock_file_name}\" still there, skipping."
+      logger.warn "Lock file \"#{lock_file_name}\" still there, skipping."
     end
   end
 

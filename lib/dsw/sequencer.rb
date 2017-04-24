@@ -118,7 +118,7 @@ class Sequencer
       logger.error "checking lock file '#{lfname}' presence:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
-      Mailer.notify_admins('lock_file_check', e)
+      Mailer.notify_admins(self, 'lock_file_check', e)
     end
   end
 
@@ -143,7 +143,7 @@ class Sequencer
       logger.error "while forbidding access to deep seq data:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
-      Mailer.notify_admins('forbid_dir', e)
+      Mailer.notify_admins(self, 'forbid_dir', e)
     ensure
       FileUtils.rm forbid_lock_file_name if lock_file_present?(forbid_lock_file_name)
     end
@@ -186,7 +186,7 @@ class Sequencer
       logger.error "#{e.class} encountered while performing the sync'ing step"
       logger.error e.message
       logger.error "trace:\n#{e.backtrace.join("\n")}"
-      Mailer.notify_admins('sync', e)
+      Mailer.notify_admins(self, 'sync', e)
     ensure
       FileUtils.rm lock_file_name if File.exists?(lock_file_name)
     end
@@ -243,7 +243,7 @@ class Sequencer
             FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
             FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
-            Mailer.notify_run_finished
+            Mailer.notify_run_finished(self)
 
             # guess what
             duplicity!
@@ -260,7 +260,7 @@ class Sequencer
         logger.error "while performing the archiviation step:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        Mailer.notify_admins('archive', e)
+        Mailer.notify_admins(self, 'archive', e)
       ensure
         FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
       end
@@ -291,12 +291,12 @@ class Sequencer
           FileUtils.touch lock_file_name
 
           # Duplicity-specific log file
-          dup_log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{run_name}.duplicity.log")
+          dup_log_file_name = File.join(Conf.global_conf[:log_dir], "#{run_name}.duplicity.log")
 
           # Remote backup location access data
           archive_user = Conf.global_conf[:zib_archive_user]
           archive_host = Conf.global_conf[:zib_archive_host]
-          local_duplicity_cache = File.join(Conf.global_conf[:basecall_dir], ".archive")
+          local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
 
           # Default set of flag/value pairs
           # the final line joins key-value pairs with a '=' char 
@@ -371,7 +371,7 @@ class Sequencer
         logger.error "in duplicity backup function:"
         logger.error e.message
         logger.error e.backtrace.join("\n")
-        Mailer.notify_admins("duplicity_function", e)
+        Mailer.notify_admins(self, "duplicity_function", e)
       ensure
         log_file.close if log_file
         FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
@@ -426,7 +426,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       logger.error "in filter data function:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
-      Mailer.notify_admins("filter_data", e)
+      Mailer.notify_admins(self, "filter_data", e)
     ensure
       FileUtils.rm lock_file_name if File.exists?(lock_file_name)
     end
@@ -446,12 +446,12 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
 
     begin
       # Duplicity-specific log file
-      dup_log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{runname}.restore.log")
+      dup_log_file_name = File.join(Conf.global_conf[:log_dir], "#{runname}.restore.log")
 
       # Remote backup location access data
       archive_user = Conf.global_conf[:zib_archive_user]
       archive_host = Conf.global_conf[:zib_archive_host]
-      local_duplicity_cache = File.join(Conf.global_conf[:basecall_dir], ".archive")
+      local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
       dest_dir = File.join(Conf.global_conf[:restore_dir], options[:run_name])
 
       # Default set of flag/value pairs
@@ -510,7 +510,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       logger.error "in duplicity restore function:"
       logger.error e.message
       logger.error e.backtrace.join("\n")
-      Mailer.notify_admins("duplicity_function1", e)
+      Mailer.notify_admins(self, "duplicity_function1", e)
     ensure
       log_file.close if log_file
     end

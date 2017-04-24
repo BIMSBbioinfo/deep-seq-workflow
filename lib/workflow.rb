@@ -27,11 +27,11 @@ class Workflow
         manager = Sequencer.new(run_dir)
       rescue Errors::EmptyRunDirPathError => erdpe
         logger.error("rundir path parameter is empty ('#{erdpe.message}'); Exiting with status 1.")
-        Mailer.notify_admins('workflow_start', erdpe)
+        Mailer.notify_admins(self, 'workflow_start', erdpe)
         exit(1)
       rescue Errors::UnknownMachineTypeError => umte
         logger.error("Unknown machine type extrapolated from directory name: '#{umte.message}'; Exiting with status 1.")
-        Mailer.notify_admins('workflow_start', umte)
+        Mailer.notify_admins(self, 'workflow_start', umte)
         exit(1)
       end
 
