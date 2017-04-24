@@ -10,7 +10,7 @@ class Sequencer
       @run_dir = rundir
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
-      @log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{@run_name}.log")
+      @log_file_name = File.join(Conf.global_conf[:log_dir], "#{@run_name}.log")
 
       # Error lock file, needs to be deleted by hand for the workflow to resume
       @error_file_name = "#{@run_dir}.err"
