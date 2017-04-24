@@ -1,5 +1,5 @@
 class Mailer
-  EVERYBODY = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de"]
+  EVERYBODY = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de", "kirsten.richter@mdc-berlin.de"]
   ADMINS = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
 
   def self.notify_admins(op, error =nil)

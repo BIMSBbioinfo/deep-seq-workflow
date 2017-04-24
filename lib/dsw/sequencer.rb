@@ -7,7 +7,7 @@ class Sequencer
     if rundir.empty?
       raise Errors::EmptyRunDirPathError.new(rundir)
     else
-      @run_dir = run_dir
+      @run_dir = rundir
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
       @log_file_name = File.join(Conf.global_conf[:basecall_dir], ".log", "#{@run_name}.log")
@@ -34,6 +34,29 @@ class Sequencer
   end
 
   ALLOWED_STEP_NAMES = [:archive, :duplicity, :filter_data, :demultiplex].freeze
+
+  # This is the function that kicks the workflow going.
+  # Takes a step name from a list of allowed names and start the workflow
+  # from there.
+  def run_from(step, options =nil)
+    # Error lock file presence vincit omnia
+    unless error?
+      if ALLOWED_STEP_NAMES.include?(step)
+        logger.info "[workflow_start] Starting deep seq data workflow on machine: #{self.class.name}, from step: '#{step}'"
+        logger.info self.to_yaml
+        if options.nil?
+          send("#{step}!")
+        else
+          send("#{step}!", options)
+        end
+        logger.info "[workflow_end] End of deep seq data workflow."
+      else
+        # illegal step parameter specified: notify and exit
+        logger.error "Illegal step parameter specified: #{step}"
+        notify_admins('illegal_step')
+      end
+    end
+  end
 
   # Get rid of some log noise.
   def to_yaml_properties
