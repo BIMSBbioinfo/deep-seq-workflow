@@ -96,7 +96,7 @@ class Sequencer
     File.exists?(skip_file_name)
   end
 
-  # Did we already forbid access to the sequencing data?
+  # Checks wether access to the sequencing data has already been forbidden.
   def dir_forbidden?
     if Conf.global_conf[:debug]
       File.stat(run_dir).mode.to_s(8) == "40755"

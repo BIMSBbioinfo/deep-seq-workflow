@@ -35,11 +35,16 @@ class Workflow
         exit(1)
       end
 
-      if step == :forbid
-        # different, faster cronjob, this way we get less log noise
-        manager.forbid!
+      if Dir["#{manager.run_dir}/*"].empty? && Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
+        logger.warning("#{manager.run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{manager.run_dir} (sequencer artifacts)")
+        FileUtils.remove_dir(manager.run_dir, true)
       else
-        manager.run_from(step)
+        if step == :forbid
+          # different, faster cronjob, this way we get less log noise
+          manager.forbid!
+        else
+          manager.run_from(step)
+        end
       end
 
     end

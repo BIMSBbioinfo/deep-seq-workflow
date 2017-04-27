@@ -1,7 +1,7 @@
 class Conf
 
   HOSTNAME = `hostname`.chomp
-  PREFIX = File.join(BASECALL_DIR, '.debug')
+  PREFIX = File.join('/', 'data', 'basecalls', '.debug')
   # PREFIX = '/'
   DEBUG = true
   # DEBUG = false
