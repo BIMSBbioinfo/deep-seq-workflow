@@ -53,14 +53,29 @@ class NextSeq < Sequencer
             duplicity!
 
           # if it does but the run has already finished and this is just an
-          # artifacts from the machine (thanks NextSeqs):
+          # artifacts from the machine (thanks Illumina):
           elsif File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
             # sync dup and delete
+            logger.warning("Syncing sequencer artifact rundir, run duplicity again and delete the duplicates")
+
             source_dir = Shellwords.escape("#{run_dir}/.")
-            dest_dir = Shellwords.escape(File.join(Conf.global_conf[:safe_location_dir], run_name))
-            FileUtils.cp_r(source_dir, dest_dir)
+            FileUtils.cp_r(source_dir, new_run_dir)
+            
+            # reset users' permissions
+            Find.find(new_run_dir) do |path|
+              if File.directory?(path)
+                File.chmod 0755, path
+              else
+                File.chmod 0744, path
+              end
+            end
+            FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
+            FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
             duplicity!({single_step: true})
+
+            FileUtils.remove_dir(run_dir)
+            FileUtils.remove_dir(File.join(Conf.global_conf[:safe_location_dir], run_name), true)
           else
             raise DuplicateRunError("Duplicate run name detected (#{run_name})")
           end
