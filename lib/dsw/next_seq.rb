@@ -24,8 +24,6 @@ class NextSeq < Sequencer
           # unless a directory with the same path exists:
           if !File.directory?(new_run_dir)
 
-            FileUtils.rm skip_file_name
-
             # Move dir to final location and link back to /data/basecalls
             FileUtils.mv run_dir, new_run_dir
             logger.info "#{run_dir} moved to #{new_run_dir}"
@@ -96,7 +94,6 @@ class NextSeq < Sequencer
       logger.warn "Lock file \"#{lock_file_name}\" still there, skipping."
     end
   end
-            # sync dup and delete
 
 end
 
