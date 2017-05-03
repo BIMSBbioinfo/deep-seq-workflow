@@ -57,13 +57,14 @@ class HiSeq < Sequencer
             Mailer.notify_run_finished(self)
 
             # guess what
+            @run_dir = new_run_dir
             duplicity!
 
           # if it does but the run has already finished and this is just an
           # artifacts from the machine (thanks Illumina):
           elsif File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
             # sync dup and delete
-            logger.warning("Syncing sequencer artifact rundir, run duplicity again and delete the duplicates")
+            logger.warn("Syncing sequencer artifact rundir, run duplicity again and delete the duplicates")
 
             source_dir = Shellwords.escape("#{run_dir}/.")
             FileUtils.cp_r(source_dir, new_run_dir)
@@ -79,9 +80,12 @@ class HiSeq < Sequencer
             FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
             FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
+	    # needed for the duplicity call
+	    old_run_dir = @run_dir
+            @run_dir = new_run_dir
             duplicity!({single_step: true})
 
-            FileUtils.remove_dir(run_dir)
+            FileUtils.remove_dir(old_run_dir)
             FileUtils.remove_dir(File.join(Conf.global_conf[:safe_location_dir], run_name), true)
           else
             raise Errors::DuplicateRunError("Duplicate run name detected (#{run_name})")

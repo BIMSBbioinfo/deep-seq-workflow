@@ -1,7 +1,6 @@
 class Sequencer
     
-  attr_reader :run_dir, :run_name, :lock_file_name, :error_file_name,
-    :skip_file_name
+  attr_reader :run_dir, :run_name, :lock_file_name, :logger
 
   def initialize(rundir)
     if rundir.empty?
@@ -11,25 +10,20 @@ class Sequencer
       @run_name = File.basename(@run_dir)
       @lock_file_name = "#{@run_dir}.lock"
       @log_file_name = File.join(Conf.global_conf[:log_dir], "#{@run_name}.log")
-
-      # Error lock file, needs to be deleted by hand for the workflow to resume
-      @error_file_name = "#{@run_dir}.err"
-      # Skip lock file, makes the workflow skip one turn to check for Illumina's weird
-      # way of notifying the user about (some) errors.
-      @skip_file_name = "#{@run_dir}.skip"
-      Sequencer.select(sn: `ls -ld #{@run_dir}`.split("\s")[2].sub('seq_', ''))
     end
   end
 
-  def self.select(options)
-    case options[:sn][0]
-    when 'M' then MiniSeq.new
-    when 'N' then NextSeq.new
-    when 'S' then HiSeq.new
-    when 'K' then HiSeq.new
-    when 'P' then Pacbio.new
+  def self.select(run_dir)
+    serial_no = `ls -ld #{run_dir}`.split("\s")[2].sub('seq_', '')
+
+    case serial_no[0]
+    when 'M' then MiniSeq.new(run_dir)
+    when 'N' then NextSeq.new(run_dir)
+    when 'S' then HiSeq.new(run_dir)
+    when 'K' then HiSeq.new(run_dir)
+    when 'P' then Pacbio.new(run_dir)
     else
-      raise Errors::UnknowMachineTypeError.new(options[:sb])
+      raise Errors::UnknownMachineTypeError.new(serial_no)
     end
   end
 
@@ -39,22 +33,19 @@ class Sequencer
   # Takes a step name from a list of allowed names and start the workflow
   # from there.
   def run_from(step, options =nil)
-    # Error lock file presence vincit omnia
-    unless error?
-      if ALLOWED_STEP_NAMES.include?(step)
-        logger.info "[workflow_start] Starting deep seq data workflow on machine: #{self.class.name}, from step: '#{step}'"
-        logger.info self.to_yaml
-        if options.nil?
-          send("#{step}!")
-        else
-          send("#{step}!", options)
-        end
-        logger.info "[workflow_end] End of deep seq data workflow."
-      else
-        # illegal step parameter specified: notify and exit
-        logger.error "Illegal step parameter specified: #{step}"
-        notify_admins('illegal_step')
-      end
+    if ALLOWED_STEP_NAMES.include?(step)
+    logger.info "[workflow_start] Starting deep seq data workflow on machine: #{self.class.name}, from step: '#{step}'"
+    logger.info self.to_yaml
+    if options.nil?
+      send("#{step}!")
+    else
+      send("#{step}!", options)
+    end
+    logger.info "[workflow_end] End of deep seq data workflow."
+    else
+    # illegal step parameter specified: notify and exit
+    logger.error "Illegal step parameter specified: #{step}"
+    notify_admins('illegal_step')
     end
   end
 
@@ -88,21 +79,9 @@ class Sequencer
     File.exists?(File.join(run_dir, 'RTAComplete.txt'))
   end
 
-  def error?
-    File.exists?(error_file_name)
-  end
-
-  def skip?
-    File.exists?(skip_file_name)
-  end
-
   # Checks wether access to the sequencing data has already been forbidden.
   def dir_forbidden?
-    if Conf.global_conf[:debug]
-      File.stat(run_dir).mode.to_s(8) == "40755"
-    else
-      File.stat(run_dir).mode.to_s(8) == "100000" || File.stat(run_dir).mode.to_s(8) == "40000"
-    end
+    File.stat(run_dir).mode.to_s(8) == "100000" || File.stat(run_dir).mode.to_s(8) == "40000"
   end
 
   # Checks if a given lock file is present in the specified location.
@@ -177,7 +156,7 @@ class Sequencer
           logger.info "#{result.changes.count} change(s) sync'd."
           logger.info "End of #{rsync_type} rsync."
         else
-          raise RsyncProcessError.new(
+          raise Errors::RsyncProcessError.new(
             "'rsync' exited with nonzero status (#{rsync_type} rsync), motivation: #{result.error}")
         end
       end
@@ -220,8 +199,6 @@ class Sequencer
 
           unless File.directory?(new_run_dir)
 
-            FileUtils.rm skip_file_name
-
             # Move dir to final location and link back to /data/basecalls
             FileUtils.mv run_dir, new_run_dir
             logger.info "#{run_dir} moved to #{new_run_dir}"
@@ -246,10 +223,11 @@ class Sequencer
             Mailer.notify_run_finished(self)
 
             # guess what
+            @run_dir = new_run_dir
             duplicity!
 
           else
-            raise DuplicateRunError("Duplicate run name detected (#{run_name})")
+            raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})")
           end
 
         else
@@ -316,7 +294,7 @@ class Sequencer
           cmd_line = ['duplicity', 'full']
           cmd_line += duplicity_flags
           cmd_line += [run_dir,
-                       "pexpect+sftp://#{archive_user}#{archive_host}/#{archive_dir}/#{run_name}"]
+                       "pexpect+sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{run_name}"]
 
           log_file = File.open(dup_log_file_name, 'a')
 
@@ -361,11 +339,11 @@ class Sequencer
             # XXX check if some of the filtered data is needed by the demultiplexing step
             filter_data! unless default_options[:single_step]
           else
-            raise DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
+            raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
           end
 
         else
-          raise DuplicityLockError.new("Duplicity lock file is still present! Aborting workflow.")
+          raise Errors::DuplicityLockError.new("Duplicity lock file is still present! Aborting workflow.")
         end
       rescue => e
         logger.error "in duplicity backup function:"
@@ -400,7 +378,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
         # Runs the above command and saves the output in 'file_list';
         # reports eventual errors.
         file_list = %x[ #{flist_cmd} ]
-        raise FindProcessError.new("'find' or 'grep' child processes exited with error status") if $?.exitstatus > 1
+        raise Errors::FindProcessError.new("'find' or 'grep' child processes exited with error status") if $?.exitstatus > 1
 
         file_list = file_list.split("\n")
 
@@ -503,7 +481,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
         #notify somebody
 
       else
-        raise DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
+        raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
       end
 
     rescue => e
