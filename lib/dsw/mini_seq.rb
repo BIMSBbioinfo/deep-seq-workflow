@@ -1,7 +1,8 @@
 class MiniSeq < Sequencer
+  ALTERNATIVE_END_FILE = 'RunCompletionStatus.xml'
 
   def seq_complete?
-    File.exists?(File.join(run_dir, 'RunCompletionStatus.xml'))
+    File.exists?(File.join(run_dir, 'RTAComplete.txt')) || File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
   end
 
   def archive!
