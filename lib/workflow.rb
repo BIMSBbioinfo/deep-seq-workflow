@@ -21,7 +21,7 @@ require_relative 'dsw/mini_seq'
 class Workflow
   include Errors
 
-  def self.select_manager(rundir)
+  def self.select_manager(run_dir)
     begin
       manager = Sequencer.select(run_dir)
     rescue Errors::EmptyRunDirPathError => erdpe

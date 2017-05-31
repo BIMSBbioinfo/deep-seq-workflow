@@ -71,8 +71,8 @@ class NextSeq < Sequencer
             FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
             FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
-	    # needed for the duplicity call
-	    old_run_dir = @run_dir
+            # needed for the duplicity call
+            old_run_dir = @run_dir
             @run_dir = new_run_dir
             duplicity!({single_step: true})
 
