@@ -26,7 +26,8 @@ class DSW
         if options.rundir.nil?
           Workflow.start(:forbid)
         else
-          Sequencer.new(options.rundir).forbid!
+          manager = Workflow.select_manager(options.rundir)
+          manager.forbid!
         end
 
       end
@@ -45,7 +46,8 @@ class DSW
         if options.rundir.nil?
           Workflow.start(:archive)
         else
-          Sequencer.new(options.rundir).run_from(:archive)
+          manager = Workflow.select_manager(options.rundir)
+          manager.run_from(:archive)
         end
 
       end
@@ -65,9 +67,11 @@ class DSW
           Workflow.start(:duplicity)
         else
           if options.singlestep
-            Sequencer.new(options.rundir).run_from(:duplicity, {single_step: true})
+            manager = Workflow.select_manager(options.rundir)
+            manager.run_from(:duplicity, {single_step: true})
           else
-            Sequencer.new(options.rundir).run_from(:duplicity)
+            manager = Workflow.select_manager(options.rundir)
+            manager.run_from(:duplicity)
           end
         end
 
@@ -86,7 +90,8 @@ class DSW
         if options.rundir.nil?
           Workflow.start(:filter_data)
         else
-          Sequencer.new(options.rundir).run_from(:filter_data)
+          manager = Workflow.select_manager(options.rundir)
+          manager.run_from(:filter_data)
         end
 
       end
@@ -104,7 +109,8 @@ class DSW
         if options.rundir.nil?
           Workflow.start(:demultiplex)
         else
-          Sequencer.new(options.rundir).run_from(:demultiplex)
+          manager = Workflow.select_manager(options.rundir)
+          manager.run_from(:demultiplex)
         end
 
       end
