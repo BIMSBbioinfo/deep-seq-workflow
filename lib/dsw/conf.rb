@@ -1,10 +1,10 @@
 class Conf
 
   HOSTNAME = `hostname`.chomp
-  PREFIX = File.join('/', 'data', 'basecalls', '.debug')
-  # PREFIX = '/'
-  DEBUG = true
-  # DEBUG = false
+  # PREFIX = File.join('/', 'data', 'basecalls', '.debug')
+  PREFIX = '/'
+  # DEBUG = true
+  DEBUG = false
   SEQ_DIR_REGEXP = '.seq_*'
 
   def self.global_conf
