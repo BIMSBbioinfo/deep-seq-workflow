@@ -27,7 +27,7 @@ class DSW
           Workflow.start(:forbid)
         else
           manager = Workflow.select_manager(options.rundir)
-          manager.forbid!
+          manager.forbid! unless Workflow.remove_dir_if_empty(manager)
         end
 
       end
@@ -47,7 +47,7 @@ class DSW
           Workflow.start(:archive)
         else
           manager = Workflow.select_manager(options.rundir)
-          manager.run_from(:archive)
+          manager.run_from(:archive) unless Workflow.remove_dir_if_empty(manager)
         end
 
       end
@@ -68,10 +68,10 @@ class DSW
         else
           if options.singlestep
             manager = Workflow.select_manager(options.rundir)
-            manager.run_from(:duplicity, {single_step: true})
+            manager.run_from(:duplicity, {single_step: true}) unless Workflow.remove_dir_if_empty(manager)
           else
             manager = Workflow.select_manager(options.rundir)
-            manager.run_from(:duplicity)
+            manager.run_from(:duplicity) unless Workflow.remove_dir_if_empty(manager)
           end
         end
 
@@ -91,7 +91,7 @@ class DSW
           Workflow.start(:filter_data)
         else
           manager = Workflow.select_manager(options.rundir)
-          manager.run_from(:filter_data)
+          manager.run_from(:filter_data) unless Workflow.remove_dir_if_empty(manager)
         end
 
       end
@@ -110,7 +110,7 @@ class DSW
           Workflow.start(:demultiplex)
         else
           manager = Workflow.select_manager(options.rundir)
-          manager.run_from(:demultiplex)
+          manager.run_from(:demultiplex) unless Workflow.remove_dir_if_empty(manager)
         end
 
       end

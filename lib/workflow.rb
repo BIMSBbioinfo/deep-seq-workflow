@@ -36,16 +36,25 @@ class Workflow
 
     return manager
   end
+
+  # removes an empty rundir if it is just an artificial duplicate due to the sequencer software that keeps writing on the
+  # remote share.
+  def self.remove_dir_if_empty(manager)
+    if Dir["#{manager.run_dir}/*"].empty? && Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
+      manager.logger.warning("#{manager.run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{manager.run_dir} (sequencer artifacts)")
+      FileUtils.remove_dir(manager.run_dir, true)
+      return true
+    else
+      return false
+    end
+  end
  
   def self.start(step)
     Dir.glob(File.join(Conf.global_conf[:basecall_dir], Conf.global_conf[:seq_dir_regexp], '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
 
       manager = select_manager(run_dir)
 
-      if Dir["#{run_dir}/*"].empty? && Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
-        manager.logger.warning("#{run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{run_dir} (sequencer artifacts)")
-        FileUtils.remove_dir(run_dir, true)
-      else
+      unless remove_dir_if_empty(manager)
         if step == :forbid
           # different, faster cronjob, this way we get less log noise
           manager.forbid!
