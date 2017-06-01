@@ -41,7 +41,7 @@ class Workflow
   # remote share.
   def self.remove_dir_if_empty(manager)
     if Dir["#{manager.run_dir}/*"].empty? && Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
-      manager.logger.warning("#{manager.run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{manager.run_dir} (sequencer artifacts)")
+      manager.logger.warn("#{manager.run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{manager.run_dir} (sequencer artifacts)")
       FileUtils.remove_dir(manager.run_dir, true)
       return true
     else
