@@ -11,7 +11,7 @@ Subject: [Deep Seq workflow] Error: #{op_code}
 Date: #{Time.now}
 
 Error code: #{op_code}
-Run dir: #{manager.new_run_dir.nil? ? manager.run_dir : manager.new_run_dir}
+Run dir: #{manager.run_dir}
 Host: #{HOSTNAME}
 
 See #{manager.log_file_name} for details.\n|
@@ -45,7 +45,7 @@ To: #{user}
 Subject: [Deep Seq workflow] Processing of run #{manager.run_name} finished
 Date: #{Time.now}
 
-Run dir: #{manager.new_run_dir.nil? ? manager.run_dir : manager.new_run_dir}
+Run dir: #{manager.run_dir}
 Access for the users has been restored.
 The backup procedure and demultiplexing may still be underway.
 
@@ -75,7 +75,7 @@ During run:
 
 errors were detected by the sequencing software; please check the log files:
 
-#{manager.new_run_dir.nil? ? manager.run_dir : manager.new_run_dir}/Logs/Error_*.log
+#{manager.run_dir}/Logs/Error_*.log
 
 and contact the vendor if needed.
 
