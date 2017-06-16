@@ -1,6 +1,6 @@
 class Sequencer
     
-  attr_reader :run_dir, :run_name, :lock_file_name, :logger
+  attr_reader :run_dir, :run_name, :lock_file_name, :logger, :log_file_name
 
   def initialize(rundir)
     if rundir.empty?
@@ -413,7 +413,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
   end
 
   # manual restore function
-  def restore!(options ={})
+  def self.restore!(options ={})
     default_options = {}
     default_options.merge!(options)
 
@@ -433,6 +433,9 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
       dest_dir = File.join(Conf.global_conf[:restore_dir], options[:run_name])
       manager = Sequencer.new(dest_dir)
+      archive_dir = Conf.global_conf[:zib_archive_dir]
+      duplicity_lock = "#{dest_dir}.duplicity.lock"
+
 
       # Default set of flag/value pairs
       # the final line joins key-value pairs with a '=' char 
@@ -496,7 +499,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
     end
   end
 
-  def map_long_name_to_short(rname)
+  def self.map_long_name_to_short(rname)
     # TODO
     # name_map = CSV.read(Conf.global_conf[:map_file_name])
 

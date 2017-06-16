@@ -12,7 +12,7 @@ Date: #{Time.now}
 
 Error code: #{op_code}
 Run dir: #{manager.run_dir}
-Host: #{HOSTNAME}
+Host: #{Conf.global_conf[:hostname]}
 
 See #{manager.log_file_name} for details.\n|
 

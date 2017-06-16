@@ -126,10 +126,10 @@ class DSW
 
         options.default runname: nil
 
-        if options.rundir.nil?
+        if options.runname.nil?
           say "you need to specify a --runname value."
         else
-          Workflow.restore!(run_name: options.runname)
+          Sequencer.restore!(run_name: options.runname)
         end
 
       end
