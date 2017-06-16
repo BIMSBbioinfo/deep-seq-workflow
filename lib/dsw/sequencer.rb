@@ -220,10 +220,11 @@ class Sequencer
             FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
             FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
+            @run_dir = new_run_dir
+
             Mailer.notify_run_finished(self)
 
             # guess what
-            @run_dir = new_run_dir
             duplicity!
 
           else
@@ -431,6 +432,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       archive_host = Conf.global_conf[:zib_archive_host]
       local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
       dest_dir = File.join(Conf.global_conf[:restore_dir], options[:run_name])
+      manager = Sequencer.new(dest_dir)
 
       # Default set of flag/value pairs
       # the final line joins key-value pairs with a '=' char 
@@ -452,8 +454,8 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
 
       log_file = File.open(dup_log_file_name, 'a')
 
-      logger.info "Duplicity command line:"
-      logger.info cmd_line.join(' ')
+      manager.logger.info "Duplicity command line:"
+      manager.logger.info cmd_line.join(' ')
 
       # Sub-process creation (see https://github.com/jarib/childprocess)
       duplicity_proc = ChildProcess.build(*cmd_line)
@@ -468,13 +470,13 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
 
       # Start execution and wait for termination
       duplicity_proc.start
-      logger.info "Started duplicity remote restore procedure. See '#{dup_log_file_name}' for details."
+      manager.logger.info "Started duplicity remote restore procedure. See '#{dup_log_file_name}' for details."
       duplicity_proc.wait
 
       if duplicity_proc.exit_code == 0
         # Remove our duplicity-specific lock only on success
         FileUtils.rm duplicity_lock
-        logger.info "Duplicity successfully completed a remote backup."
+        manager.logger.info "Duplicity successfully completed a remote backup."
 
         log_file.close if log_file
 
@@ -485,24 +487,27 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       end
 
     rescue => e
-      logger.error "in duplicity restore function:"
-      logger.error e.message
-      logger.error e.backtrace.join("\n")
-      Mailer.notify_admins(self, "duplicity_function1", e)
+      manager.logger.error "in duplicity restore function:"
+      manager.logger.error e.message
+      manager.logger.error e.backtrace.join("\n")
+      Mailer.notify_admins(manager, "restore_function", e)
     ensure
       log_file.close if log_file
     end
   end
 
   def map_long_name_to_short(rname)
-    name_map = CSV.read(Conf.global_conf[:map_file_name])
+    # TODO
+    # name_map = CSV.read(Conf.global_conf[:map_file_name])
 
-    hit = name_map.find { |m| m[0] == rname }
-    if hit.nil?
-      rname
-    else
-      hit[1]
-    end
+    # hit = name_map.find { |m| m[0] == rname }
+    # if hit.nil?
+    #   rname
+    # else
+    #   hit[1]
+    # end
+    
+    rname
 
   end
 

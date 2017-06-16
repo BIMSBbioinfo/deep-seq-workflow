@@ -104,13 +104,32 @@ class DSW
       c.option '--rundir DIR', String, 'acts only on the specified directory'
       c.action do |args, options|
 
-        options.default rundir: nil
+        options.default runname: nil
+
+        if options.runname.nil?
+          say "you need to specify --runname value"
+        else
+          dest_dir = File.join(Conf.global_conf[:restore_dir], options.runname)
+          manager = Workflow.select_manager(dest_dir)
+          manager.run_from(:restore!)
+        end
+
+      end
+    end
+
+    command :restore do |c|
+      c.syntax = 'dsw restore [options]'
+      c.summary = ''
+      c.description = 'Calls the restore routine to retrieve old backups from the tape archive.'
+      c.option '--runname DIR', String, 'fetches the run dir for the specified run name'
+      c.action do |args, options|
+
+        options.default runname: nil
 
         if options.rundir.nil?
-          Workflow.start(:demultiplex)
+          say "you need to specify a --runname value."
         else
-          manager = Workflow.select_manager(options.rundir)
-          manager.run_from(:demultiplex) unless Workflow.remove_dir_if_empty(manager)
+          Workflow.restore!(run_name: options.runname)
         end
 
       end
