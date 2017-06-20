@@ -71,6 +71,8 @@ class Sequencer
     @logger
   end
 
+  # XXX now it is the same as the mdc_archive_dir so it's fine but this code is
+  # not correct.
   def archive_dir
     Conf.global_conf[:zib_archive_dir]
   end
@@ -258,7 +260,7 @@ class Sequencer
   def duplicity!(options ={})
     # this is just some idiom to declare some set of default options for the method
     # and adding whaterver overridden value comes down from the user.
-    default_options = { single_step: false }
+    default_options = { single_step: false, use_local_tapes: false }
     default_options.merge!(options)
 
     duplicity_lock = "#{run_dir}.duplicity.lock"
@@ -272,9 +274,16 @@ class Sequencer
           # Duplicity-specific log file
           dup_log_file_name = File.join(Conf.global_conf[:log_dir], "#{run_name}.duplicity.log")
 
-          # Remote backup location access data
-          archive_user = Conf.global_conf[:zib_archive_user]
-          archive_host = Conf.global_conf[:zib_archive_host]
+          if default_options[:use_local_tapes]
+            # Local tape archive location access data
+            archive_user = Conf.global_conf[:mdc_archive_user]
+            archive_host = Conf.global_conf[:mdc_archive_host]
+          else
+            # Remote backup location access data
+            archive_user = Conf.global_conf[:zib_archive_user]
+            archive_host = Conf.global_conf[:zib_archive_host]
+          end
+
           local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
 
           # Default set of flag/value pairs
@@ -315,7 +324,7 @@ class Sequencer
           duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
 
           # Start the data demultiplexing if all the conditions are met
-          unless default_options[:single_step]
+          unless (default_options[:single_step] || default_options[:use_local_tapes])
             if File.exists?(File.join(Conf.global_conf[:sample_sheets_dir], "#{run_name}.csv"))
               fork { demultiplex! }
             end
@@ -336,9 +345,12 @@ class Sequencer
             log_file.close if log_file
             FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
 
+            # if default_options[:use_local_tapes]
             # Call next step if allowed
-            # XXX check if some of the filtered data is needed by the demultiplexing step
             filter_data! unless default_options[:single_step]
+            # else
+            #   duplicity({use_local_tapes: true})
+            # end
           else
             raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
           end
@@ -436,7 +448,6 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       archive_dir = Conf.global_conf[:zib_archive_dir]
       duplicity_lock = "#{dest_dir}.duplicity.lock"
 
-
       # Default set of flag/value pairs
       # the final line joins key-value pairs with a '=' char 
       # i.e. '--tmpdir=/tmp' and returns a list of such strings.
@@ -452,7 +463,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       # The actual command line string being built
       cmd_line = ['duplicity', 'restore']
       cmd_line += duplicity_flags
-      cmd_line += ["pexpect+sftp://#{archive_user}#{archive_host}/#{archive_dir}/#{runname}",
+      cmd_line += ["pexpect+sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{runname}",
                   dest_dir]
 
       log_file = File.open(dup_log_file_name, 'a')
@@ -479,11 +490,25 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       if duplicity_proc.exit_code == 0
         # Remove our duplicity-specific lock only on success
         FileUtils.rm duplicity_lock
-        manager.logger.info "Duplicity successfully completed a remote backup."
+        manager.logger.info "Duplicity successfully completed a restore operation."
 
         log_file.close if log_file
 
-        #notify somebody
+        # TODO notify somebody
+        
+        # Link the restored directory back to the basecall main dir.
+        FileUtils.ln_s dest_dir, Conf.global_conf[:basecall_dir]
+        
+        ## fix ownership and permissions of sequencing data
+        Find.find(dest_dir) do |path|
+          if File.directory?(path)
+            File.chmod 0755, path
+          else
+            File.chmod 0744, path
+          end
+        end
+        FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], runname)
+        FileUtils.chown_R 'CF_Seq', 'deep_seq', dest_dir
 
       else
         raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")

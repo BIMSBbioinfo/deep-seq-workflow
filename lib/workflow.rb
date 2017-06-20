@@ -52,14 +52,18 @@ class Workflow
   def self.start(step)
     Dir.glob(File.join(Conf.global_conf[:basecall_dir], Conf.global_conf[:seq_dir_regexp], '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
 
-      manager = select_manager(run_dir)
+      # if the dir is an artifact, another process may have cleaned it up in the
+      # meanwhile so we should skip it.
+      if Dir.exists?(run_dir)
+        manager = select_manager(run_dir)
 
-      unless remove_dir_if_empty(manager)
-        if step == :forbid
-          # different, faster cronjob, this way we get less log noise
-          manager.forbid!
-        else
-          manager.run_from(step)
+        unless remove_dir_if_empty(manager)
+          if step == :forbid
+            # different, faster cronjob, this way we get less log noise
+            manager.forbid!
+          else
+            manager.run_from(step)
+          end
         end
       end
 

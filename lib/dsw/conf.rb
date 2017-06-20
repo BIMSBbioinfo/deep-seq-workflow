@@ -21,6 +21,9 @@ class Conf
         zib_archive_user: "bzpkuntz",
         zib_archive_host: "mdcbio.zib.de",
         zib_archive_dir: "/mdcbiosam/archiv/solexa",
+        mdc_archive_user: "sa-p-bimsb-archive",
+        mdc_archive_host: "sl-it-p-irods1.mdc-berlin.net",
+        mdc_archive_dir: "/mdcbiosam/archiv/solexa",
         debug: DEBUG
       }
     else
@@ -36,6 +39,9 @@ class Conf
         zib_archive_user: "bzpkuntz",
         zib_archive_host: "mdcbio.zib.de",
         zib_archive_dir: "/mdcbiosam/archiv/solexa_gpg_test",
+        mdc_archive_user: "sa-p-bimsb-archive",
+        mdc_archive_host: "sl-it-p-irods1.mdc-berlin.net",
+        mdc_archive_dir: "/mdcbiosam/archiv/solexa_test",
         debug: DEBUG
       }
     end
