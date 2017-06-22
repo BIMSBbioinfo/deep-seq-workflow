@@ -45,10 +45,9 @@ class MiniSeq < Sequencer
             FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
             FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
 
-            Mailer.notify_run_finished(self)
-
-            # guess what
             @run_dir = new_run_dir
+            Mailer.notify_run_finished(self)
+            # guess what
             duplicity!
 
           # if it does but the run has already finished and this is just an
