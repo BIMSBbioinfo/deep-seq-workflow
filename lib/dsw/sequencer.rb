@@ -18,7 +18,7 @@ class Sequencer
 
     # rundir has already been moved to /data/basecalls
     if serial_no == 'CF_Seq'
-      serial_no == File.basename(rundir).split('_')[1]
+      serial_no = File.basename(run_dir).split('_')[1]
     end
 
     case serial_no[0]
@@ -354,7 +354,7 @@ class Sequencer
             # Call next step if allowed
               filter_data! unless default_options[:single_step]
             else
-              duplicity(defaul_options.merge({use_local_tapes: true}))
+              duplicity(default_options.merge({use_local_tapes: true}))
             end
           else
             raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
