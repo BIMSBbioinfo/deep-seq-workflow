@@ -16,6 +16,11 @@ class Sequencer
   def self.select(run_dir)
     serial_no = `ls -ld #{run_dir}`.split("\s")[2].sub('seq_', '')
 
+    # rundir has already been moved to /data/basecalls
+    if serial_no == 'CF_Seq'
+      serial_no == File.basename(rundir).split('_')[1]
+    end
+
     case serial_no[0]
     when 'M' then MiniSeq.new(run_dir)
     when 'N' then NextSeq.new(run_dir)
@@ -345,12 +350,12 @@ class Sequencer
             log_file.close if log_file
             FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
 
-            # if default_options[:use_local_tapes]
+            if default_options[:use_local_tapes]
             # Call next step if allowed
-            filter_data! unless default_options[:single_step]
-            # else
-            #   duplicity({use_local_tapes: true})
-            # end
+              filter_data! unless default_options[:single_step]
+            else
+              duplicity(defaul_options.merge({use_local_tapes: true}))
+            end
           else
             raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
           end
