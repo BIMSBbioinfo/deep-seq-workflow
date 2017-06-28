@@ -17,6 +17,7 @@ class Conf
         safe_location_dir: File.join(PREFIX, 'data', 'bc_copy'),
         sample_sheets_dir: File.join(PREFIX, 'data', 'basecalls', 'sample_sheets'),
         local_dup_cache_dir: File.join(PREFIX, 'data', 'basecalls', '.archive'),
+        local_dup_cache_dir1: File.join(PREFIX, 'data', 'basecalls', '.archive1'),
         restore_dir: File.join(PREFIX, 'data', 'basecalls', '.restore'),
         zib_archive_user: "bzpkuntz",
         zib_archive_host: "mdcbio.zib.de",

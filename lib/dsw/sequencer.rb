@@ -14,7 +14,7 @@ class Sequencer
   end
 
   def self.select(run_dir)
-    serial_no = `ls -ld #{run_dir}`.split("\s")[2].sub('seq_', '')
+    serial_no = `ls -ld #{Shellwords.escape(run_dir)}`.split("\s")[2].sub('seq_', '')
 
     # rundir has already been moved to /data/basecalls
     if serial_no == 'CF_Seq'
@@ -283,13 +283,13 @@ class Sequencer
             # Local tape archive location access data
             archive_user = Conf.global_conf[:mdc_archive_user]
             archive_host = Conf.global_conf[:mdc_archive_host]
+	    local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir1]
           else
             # Remote backup location access data
             archive_user = Conf.global_conf[:zib_archive_user]
             archive_host = Conf.global_conf[:zib_archive_host]
+	    local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
           end
-
-          local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
 
           # Default set of flag/value pairs
           # the final line joins key-value pairs with a '=' char 
@@ -354,7 +354,7 @@ class Sequencer
             # Call next step if allowed
               filter_data! unless default_options[:single_step]
             else
-              duplicity(default_options.merge({use_local_tapes: true}))
+              duplicity!(default_options.merge({use_local_tapes: true}))
             end
           else
             raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
