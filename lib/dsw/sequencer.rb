@@ -265,7 +265,7 @@ class Sequencer
   def duplicity!(options ={})
     # this is just some idiom to declare some set of default options for the method
     # and adding whaterver overridden value comes down from the user.
-    default_options = { single_step: false, use_local_tapes: false }
+    default_options = { single_step: false, use_local_tapes: true }
     default_options.merge!(options)
 
     duplicity_lock = "#{run_dir}.duplicity.lock"
@@ -351,7 +351,7 @@ class Sequencer
             FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
 
             if default_options[:use_local_tapes]
-            # Call next step if allowed
+              # Call next step if allowed
               filter_data! unless default_options[:single_step]
             else
               duplicity!(default_options.merge({use_local_tapes: true}))
