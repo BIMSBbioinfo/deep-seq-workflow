@@ -306,7 +306,7 @@ class Sequencer
           }.collect{ |kv| kv.compact.join('=') }
 
           # The actual command line string being built
-          cmd_line = ['duplicity', 'full']
+          cmd_line = ['duplicity']
           cmd_line += duplicity_flags
           cmd_line += [run_dir,
                        "pexpect+sftp://#{archive_user}@#{archive_host}/#{archive_dir}/#{run_name}"]
