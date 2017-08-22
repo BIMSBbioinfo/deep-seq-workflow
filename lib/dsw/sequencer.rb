@@ -302,7 +302,8 @@ class Sequencer
             '--no-encryption': nil,
             '--tempdir': '/tmp',
             '--exclude': File.join(run_dir, 'demultiplexed_data'),
-            '--verbosity': 8
+            '--verbosity': 8,
+            '--allow-source-mismatch': nil
           }.collect{ |kv| kv.compact.join('=') }
 
           # The actual command line string being built
@@ -462,7 +463,8 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
         '--numeric-owner': nil,
         '--no-encryption': nil,
         '--tempdir': '/tmp',
-        '--verbosity': 8
+        '--verbosity': 8,
+        '--allow-source-mismatch': nil
       }.collect{ |kv| kv.compact.join('=') }
 
       # The actual command line string being built
