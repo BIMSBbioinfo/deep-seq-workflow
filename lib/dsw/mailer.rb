@@ -1,6 +1,6 @@
 class Mailer
-  EVERYBODY = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de", "kirsten.richter@mdc-berlin.de"]
-  ADMINS = ["carlomaria.massimo@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
+  EVERYBODY = ["ricardo.wurmus@mdc-berlin.de", "dan.munteanu@mdc-berlin.de", "quedenau@mdc-berlin.de", "madlen.sohn@mdc-berlin.de", "kirsten.richter@mdc-berlin.de"]
+  ADMINS = ["ricardo.wurmus@mdc-berlin.de", "dan.munteanu@mdc-berlin.de"]
 
   def self.notify_admins(manager, op_code, error =nil)
     unless Conf.global_conf[:debug]
