@@ -39,18 +39,18 @@ class Sequencer
   # from there.
   def run_from(step, options =nil)
     if ALLOWED_STEP_NAMES.include?(step)
-    logger.info "[workflow_start] Starting deep seq data workflow on machine: #{self.class.name}, from step: '#{step}'"
-    logger.info self.to_yaml
-    if options.nil?
-      send("#{step}!")
+      logger.info "[workflow_start] Starting deep seq data workflow on machine: #{self.class.name}, from step: '#{step}'"
+      logger.info self.to_yaml
+      if options.nil?
+        send("#{step}!")
+      else
+        send("#{step}!", options)
+      end
+      logger.info "[workflow_end] End of deep seq data workflow."
     else
-      send("#{step}!", options)
-    end
-    logger.info "[workflow_end] End of deep seq data workflow."
-    else
-    # illegal step parameter specified: notify and exit
-    logger.error "Illegal step parameter specified: #{step}"
-    notify_admins('illegal_step')
+      # illegal step parameter specified: notify and exit
+      logger.error "Illegal step parameter specified: #{step}"
+      notify_admins('illegal_step')
     end
   end
 
