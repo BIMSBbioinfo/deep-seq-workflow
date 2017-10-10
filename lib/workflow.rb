@@ -54,7 +54,7 @@ class Workflow
 
       # if the dir is an artifact, another process may have cleaned it up in the
       # meanwhile so we should skip it.
-      if Dir.exists?(run_dir)
+      if Dir.exists?(run_dir) && ! File.exists?("#{run_dir}.lock")
         manager = select_manager(run_dir)
 
         unless remove_dir_if_empty(manager)
