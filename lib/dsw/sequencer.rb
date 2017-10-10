@@ -265,7 +265,7 @@ class Sequencer
   def duplicity!(options ={})
     # this is just some idiom to declare some set of default options for the method
     # and adding whaterver overridden value comes down from the user.
-    default_options = { single_step: false, use_local_tapes: true }
+    default_options = { single_step: false }
     default_options.merge!(options)
 
     duplicity_lock = "#{run_dir}.duplicity.lock"
@@ -279,17 +279,10 @@ class Sequencer
           # Duplicity-specific log file
           dup_log_file_name = File.join(Conf.global_conf[:log_dir], "#{run_name}.duplicity.log")
 
-          if default_options[:use_local_tapes]
-            # Local tape archive location access data
-            archive_user = Conf.global_conf[:mdc_archive_user]
-            archive_host = Conf.global_conf[:mdc_archive_host]
-	        local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir1]
-          else
-            # Remote backup location access data
-            archive_user = Conf.global_conf[:zib_archive_user]
-            archive_host = Conf.global_conf[:zib_archive_host]
-	        local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
-          end
+          # Local tape archive location access data
+          archive_user = Conf.global_conf[:mdc_archive_user]
+          archive_host = Conf.global_conf[:mdc_archive_host]
+          local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir1]
 
           # Default set of flag/value pairs
           # the final line joins key-value pairs with a '=' char 
@@ -329,8 +322,9 @@ class Sequencer
           # Assign output streams to the log file
           duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
 
-          # Start the data demultiplexing if all the conditions are met
-          unless (default_options[:single_step] || default_options[:use_local_tapes])
+          # Start the data demultiplexing if we are not single
+          # stepping and the samplesheet for the run exists.
+          unless default_options[:single_step]
             if File.exists?(File.join(Conf.global_conf[:sample_sheets_dir], "#{run_name}.csv"))
               fork { demultiplex! }
             end
@@ -351,12 +345,8 @@ class Sequencer
             log_file.close if log_file
             FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
 
-            if default_options[:use_local_tapes]
-              # Call next step if allowed
-              filter_data! unless default_options[:single_step]
-            else
-              duplicity!(default_options.merge({use_local_tapes: true}))
-            end
+            # Call next step if allowed
+            filter_data! unless default_options[:single_step]
           else
             raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
           end
