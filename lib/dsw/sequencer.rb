@@ -283,12 +283,12 @@ class Sequencer
             # Local tape archive location access data
             archive_user = Conf.global_conf[:mdc_archive_user]
             archive_host = Conf.global_conf[:mdc_archive_host]
-	    local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir1]
+	        local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir1]
           else
             # Remote backup location access data
             archive_user = Conf.global_conf[:zib_archive_user]
             archive_host = Conf.global_conf[:zib_archive_host]
-	    local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
+	        local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
           end
 
           # Default set of flag/value pairs
