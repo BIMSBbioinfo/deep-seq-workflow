@@ -313,11 +313,11 @@ class Sequencer
           # Sub-process creation (see https://github.com/jarib/childprocess)
           duplicity_proc = ChildProcess.build(*cmd_line)
 
-          # Detach it from the parent
+          # By default, the child process does not create a new
+          # process group. This means there's no guarantee that the
+          # entire process tree will die when the child process is
+          # killed. To solve this we set "leader".
           duplicity_proc.leader = true
-
-          # XXX probably messes up the wait call later on.
-          # duplicity_proc.detach = true
 
           # Assign output streams to the log file
           duplicity_proc.io.stdout = duplicity_proc.io.stderr = log_file
