@@ -142,7 +142,7 @@ class Sequencer
   # Otherwise:
   # - it creates a lock file
   # - calls rsync and waits for it to end
-  # - logs and either returns or exit on errors (leaving the lock in place).
+  # - logs changes and errors
   #
   def sync!
     begin 
