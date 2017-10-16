@@ -7,7 +7,7 @@ class Conf
   DEBUG = false
   SEQ_DIR_REGEXP = '.seq_*'
 
-  defaults = {
+  DEFAULTS = {
     hostname: HOSTNAME,
     log_dir:  File.join(PREFIX, 'data', 'basecalls', '.log'),
     basecall_dir: File.join(PREFIX, 'data', 'basecalls'),
@@ -28,7 +28,7 @@ class Conf
 
   def self.global_conf
     if DEBUG
-      defaults.merge({
+      DEFAULTS.merge({
         log_dir: File.join(PREFIX, '.log'),
         basecall_dir: File.join(PREFIX, 'basecalls_test'), 
         safe_location_dir: File.join(PREFIX, 'bc_copy_test'),
@@ -40,7 +40,7 @@ class Conf
         debug: DEBUG
       })
     else
-      defaults
+      DEFAULTS
     end
 
   end
