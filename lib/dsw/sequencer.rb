@@ -204,8 +204,9 @@ class Sequencer
 
           new_run_dir = File.join(local_archive_dir, run_name) 
 
-          unless File.directory?(new_run_dir)
-
+          if File.directory?(new_run_dir)
+            raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})")
+          else
             # Move dir to final location and link back to /data/basecalls
             FileUtils.mv run_dir, new_run_dir
             logger.info "#{run_dir} moved to #{new_run_dir}"
@@ -233,9 +234,6 @@ class Sequencer
 
             # guess what
             duplicity!
-
-          else
-            raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})")
           end
 
         else
