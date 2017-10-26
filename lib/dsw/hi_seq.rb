@@ -67,17 +67,9 @@ class HiSeq < Sequencer
 
             source_dir = Shellwords.escape("#{run_dir}/.")
             FileUtils.cp_r(source_dir, new_run_dir)
-            
-            # reset users' permissions
-            Find.find(new_run_dir) do |path|
-              if File.directory?(path)
-                File.chmod 0755, path
-              else
-                File.chmod 0744, path
-              end
-            end
-            FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
-            FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
+
+            link = File.join(Conf.global_conf[:basecall_dir], run_name)
+            fix_permissions(new_run_dir, link)
 
             # needed for the duplicity call
             old_run_dir = @run_dir

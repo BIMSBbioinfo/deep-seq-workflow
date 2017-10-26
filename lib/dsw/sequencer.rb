@@ -493,17 +493,9 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
         
         # Link the restored directory back to the basecall main dir.
         FileUtils.ln_s dest_dir, Conf.global_conf[:basecall_dir]
-        
-        ## fix ownership and permissions of sequencing data
-        Find.find(dest_dir) do |path|
-          if File.directory?(path)
-            File.chmod 0755, path
-          else
-            File.chmod 0744, path
-          end
-        end
-        FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], runname)
-        FileUtils.chown_R 'CF_Seq', 'deep_seq', dest_dir
+
+        link = File.join(Conf.global_conf[:basecall_dir], runname)
+        fix_permissions(dest_dir, link)
 
       else
         raise Errors::DuplicityProcessError.new("'duplicity' exited with nonzero status\ncheck '#{dup_log_file_name}' for details.")
@@ -534,4 +526,19 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
 
   end
 
+
+  def fix_permissions(target, link)
+    # Grant read/write access to the sequencing files to the "CF_Seq"
+    # user and the "deep_seq" group.
+    Find.find(target) do |path|
+      if File.directory?(path)
+        File.chmod 0755, path
+      else
+        File.chmod 0744, path
+      end
+    end
+    FileUtils.chown 'CF_Seq', 'deep_seq', link
+    FileUtils.chown_R 'CF_Seq', 'deep_seq', target
+    return true
+  end
 end
