@@ -32,30 +32,10 @@ class HiSeq < Sequencer
           new_run_dir = File.join(local_archive_dir, run_name) 
 
           if !File.directory?(new_run_dir)
-
-            # Move dir to final location and link back to /data/basecalls
-            FileUtils.mv run_dir, new_run_dir
-            logger.info "#{run_dir} moved to #{new_run_dir}"
-
-            File.chmod 0755, new_run_dir
-            logger.info "Changed permissions for #{new_run_dir} to 0755"
-
-            FileUtils.ln_s new_run_dir, Conf.global_conf[:basecall_dir]
-            logger.info "Aliased #{new_run_dir} to #{Conf.global_conf[:basecall_dir]}"
-
-            ## restore users' access to sequencing files
-            Find.find(new_run_dir) do |path|
-              if File.directory?(path)
-                File.chmod 0755, path
-              else
-                File.chmod 0744, path
-              end
-            end
-            FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
-            FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
-
+            install_run(new_run_dir)
             @run_dir = new_run_dir
             Mailer.notify_run_finished(self)
+
             # guess what
             duplicity!
 

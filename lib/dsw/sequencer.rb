@@ -204,37 +204,14 @@ class Sequencer
 
           new_run_dir = File.join(local_archive_dir, run_name) 
 
-          if File.directory?(new_run_dir)
-            raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})")
-          else
-            # Move dir to final location and link back to /data/basecalls
-            FileUtils.mv run_dir, new_run_dir
-            logger.info "#{run_dir} moved to #{new_run_dir}"
+          raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})") if File.directory?(new_run_dir)
 
-            File.chmod 0755, new_run_dir
-            logger.info "Changed permissions for #{new_run_dir} to 0755"
+          install_run(new_run_dir)
+          @run_dir = new_run_dir
+          Mailer.notify_run_finished(self)
 
-            FileUtils.ln_s new_run_dir, Conf.global_conf[:basecall_dir]
-            logger.info "Aliased #{new_run_dir} to #{Conf.global_conf[:basecall_dir]}"
-
-            ## restore users' access to sequencing files
-            Find.find(new_run_dir) do |path|
-              if File.directory?(path)
-                File.chmod 0755, path
-              else
-                File.chmod 0744, path
-              end
-            end
-            FileUtils.chown 'CF_Seq', 'deep_seq', File.join(Conf.global_conf[:basecall_dir], run_name)
-            FileUtils.chown_R 'CF_Seq', 'deep_seq', new_run_dir
-
-            @run_dir = new_run_dir
-
-            Mailer.notify_run_finished(self)
-
-            # guess what
-            duplicity!
-          end
+          # guess what
+          duplicity!
 
         else
           logger.warn "Sequencing still running, just sync'ing."
@@ -526,6 +503,23 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
 
   end
 
+  # Move the current run_dir to TARGET, the absolute directory name
+  # (including the year).  It also creates a convenient link to the
+  # basecall directory.
+  def install_run(target)
+    # TODO: move atomically
+    FileUtils.mv run_dir, target
+    logger.info "#{run_dir} moved to #{target}"
+
+    File.chmod 0755, target
+    logger.info "Changed permissions for #{target} to 0755"
+
+    FileUtils.ln_s target, Conf.global_conf[:basecall_dir]
+    logger.info "Aliased #{target} to #{Conf.global_conf[:basecall_dir]}"
+
+    link = File.join(Conf.global_conf[:basecall_dir], self.run_name)
+    fix_permissions(target, link)
+  end
 
   def fix_permissions(target, link)
     # Grant read/write access to the sequencing files to the "CF_Seq"
