@@ -189,44 +189,45 @@ class Sequencer
   # Otherwise it calls the sync'ing function and exits (partial sync)
   #
   def archive!
-    unless lock_file_present?(lock_file_name)
-      begin
-        FileUtils.touch lock_file_name
-
-        if seq_complete? && dir_forbidden?
-          sync!
-
-          year = "20#{run_name[0..1]}"
-          local_archive_dir = File.join(Conf.global_conf[:basecall_dir], year)
-
-          # final rsync done
-          FileUtils.mkdir local_archive_dir unless File.directory?(local_archive_dir)
-
-          new_run_dir = File.join(local_archive_dir, run_name) 
-
-          raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})") if File.directory?(new_run_dir)
-
-          install_run(new_run_dir)
-          @run_dir = new_run_dir
-          Mailer.notify_run_finished(self)
-
-          # guess what
-          duplicity!
-
-        else
-          logger.warn "Sequencing still running, just sync'ing."
-          sync!
-        end
-      rescue => e
-        logger.error "while performing the archiviation step:"
-        logger.error e.message
-        logger.error e.backtrace.join("\n")
-        Mailer.notify_admins(self, 'archive', e)
-      ensure
-        FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
-      end
-    else
+    if lock_file_present?(lock_file_name)
       logger.warn "Lock file \"#{lock_file_name}\" still there, skipping."
+      return
+    end
+
+    begin
+      FileUtils.touch lock_file_name
+
+      if seq_complete? && dir_forbidden?
+        sync!
+
+        year = "20#{run_name[0..1]}"
+        local_archive_dir = File.join(Conf.global_conf[:basecall_dir], year)
+
+        # final rsync done
+        FileUtils.mkdir local_archive_dir unless File.directory?(local_archive_dir)
+
+        new_run_dir = File.join(local_archive_dir, run_name) 
+
+        raise Errors::DuplicateRunError.new("Duplicate run name detected (#{run_name})") if File.directory?(new_run_dir)
+
+        install_run(new_run_dir)
+        @run_dir = new_run_dir
+        Mailer.notify_run_finished(self)
+
+        # guess what
+        duplicity!
+
+      else
+        logger.warn "Sequencing still running, just sync'ing."
+        sync!
+      end
+    rescue => e
+      logger.error "while performing the archiviation step:"
+      logger.error e.message
+      logger.error e.backtrace.join("\n")
+      Mailer.notify_admins(self, 'archive', e)
+    ensure
+      FileUtils.rm lock_file_name if lock_file_present?(lock_file_name)
     end
   end
 
