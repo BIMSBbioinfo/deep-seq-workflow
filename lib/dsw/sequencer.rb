@@ -1,3 +1,5 @@
+require "csv"
+
 class Sequencer
     
   attr_reader :run_dir, :run_name, :lock_file_name, :logger, :log_file_name
@@ -490,18 +492,13 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
   end
 
   def self.map_long_name_to_short(rname)
-    # TODO
-    # name_map = CSV.read(Conf.global_conf[:map_file_name])
-
-    # hit = name_map.find { |m| m[0] == rname }
-    # if hit.nil?
-    #   rname
-    # else
-    #   hit[1]
-    # end
-    
-    rname
-
+    name_map = CSV.read("map.csv")
+    res = name_map.find {|key,value| key == rname }
+    if res
+      res[1]
+    else
+      rname
+    end
   end
 
   # Move the current run_dir to TARGET, the absolute directory name
