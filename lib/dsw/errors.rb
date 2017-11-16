@@ -10,4 +10,5 @@ module Errors
   class SequencingError < StandardError; end
   class UnknownMachineTypeError < StandardError; end
   class EmptyRunDirPathError < StandardError; end
+  class UnknownMapFile < StandardError; end
 end

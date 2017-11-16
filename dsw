@@ -122,14 +122,19 @@ class DSW
       c.summary = ''
       c.description = 'Calls the restore routine to retrieve old backups from the tape archive.'
       c.option '--runname DIR', String, 'fetches the run dir for the specified run name'
+      c.option '--subdir TYPE', String, 'the subdirectory on the archive; one of solexa, pacbio, sequel, or solid'
       c.action do |args, options|
 
         options.default runname: nil
+        options.default subdir: nil
 
         if options.runname.nil?
           say "you need to specify a --runname value."
+        elsif options.subdir.nil?
+          say "you need to specify a --subdir value."
         else
-          Sequencer.restore!(run_name: options.runname)
+          Sequencer.restore!(run_name: options.runname,
+                             sequencer: options.subdir)
         end
 
       end

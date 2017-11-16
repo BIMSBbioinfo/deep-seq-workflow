@@ -404,7 +404,7 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
     default_options.merge!(options)
 
     # run_name is a field of the Sequencer class so this local var has been named:
-    runname = map_long_name_to_short(options[:run_name])
+    runname = map_long_name_to_short(options[:subdir], options[:run_name])
     # the above function call will search the map and return the short name
     # corresponding to the long name provided or return the input untouched
     # otherwise.
@@ -418,8 +418,13 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
       archive_host = Conf.global_conf[:zib_archive_host]
       local_duplicity_cache = Conf.global_conf[:local_dup_cache_dir]
       dest_dir = File.join(Conf.global_conf[:restore_dir], options[:run_name])
+
+      # TODO: select an appropriate class dependent on the subdir
+      # option, so that we can use manager.archive_dir instead
       manager = Sequencer.new(dest_dir)
-      archive_dir = Conf.global_conf[:zib_archive_dir]
+
+      # TODO: use config value here instead of "/mdcbiosam/archiv"
+      archive_dir = "/mdcbiosam/archiv/#{options[:subdir]}"
       duplicity_lock = "#{dest_dir}.duplicity.lock"
 
       # Default set of flag/value pairs
@@ -491,8 +496,12 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
     end
   end
 
-  def self.map_long_name_to_short(rname)
-    name_map = CSV.read("map.csv")
+  def self.map_long_name_to_short(subdir, rname)
+    map_file = "map-#{subdir}.csv"
+    unless File.exists?(map_file)
+      raise Errors::UnknownMapFile.new("There is no map file for #{subdir}.")
+    end
+    name_map = CSV.read(map_file)
     res = name_map.find {|key,value| key == rname }
     if res
       res[1]
