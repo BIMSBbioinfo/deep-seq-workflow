@@ -497,10 +497,11 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
   end
 
   def self.map_long_name_to_short(subdir, rname)
-    map_file = "map-#{subdir}.csv"
-    # unless File.exists?(map_file)
-    #   raise Errors::UnknownMapFile.new("There is no map file for #{subdir}.")
-    # end
+    dir = File.expand_path File.dirname(__FILE__)
+    map_file = "#{dir}/map-#{subdir}.csv"
+    unless File.exists?(map_file)
+      raise Errors::UnknownMapFile.new("There is no map file for #{subdir}.")
+    end
     name_map = CSV.read(map_file)
     res = name_map.find {|key,value| key == rname }
     if res
