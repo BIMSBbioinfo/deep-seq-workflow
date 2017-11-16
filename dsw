@@ -133,8 +133,8 @@ class DSW
         elsif options.subdir.nil?
           say "you need to specify a --subdir value."
         else
-          Sequencer.restore!(run_name: options.runname,
-                             sequencer: options.subdir)
+          Sequencer.restore!({ run_name: options.runname,
+                               sequencer: options.subdir })
         end
 
       end
