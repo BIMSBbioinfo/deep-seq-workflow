@@ -134,7 +134,7 @@ class DSW
           say "you need to specify a --subdir value."
         else
           Sequencer.restore!({ run_name: options.runname,
-                               sequencer: options.subdir })
+                               subdir: options.subdir })
         end
 
       end
