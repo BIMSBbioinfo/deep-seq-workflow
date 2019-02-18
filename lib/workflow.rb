@@ -40,7 +40,9 @@ class Workflow
   # removes an empty rundir if it is just an artificial duplicate due to the sequencer software that keeps writing on the
   # remote share.
   def self.remove_dir_if_empty(manager)
-    if Dir["#{manager.run_dir}/*"].empty? && Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
+    if Dir.exists?(manager.run_dir) &&
+       Dir["#{manager.run_dir}/*"].empty? &&
+       Dir.exist?(File.join(Conf.global_conf[:basecall_dir], manager.run_name))
       manager.logger.warn("#{manager.run_dir} is empty and a rundir with the same name already exists in /data/basecalls: deleting #{manager.run_dir} (sequencer artifacts)")
       FileUtils.remove_dir(manager.run_dir, true)
       return true
