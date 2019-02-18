@@ -372,12 +372,16 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
         logger.info "Removing the following files:"
         logger.info file_list
 
-        # Removes the selected files, 100 at a time
-        file_list.each_slice(100) do |slice|
-          regulars = slice.reject {|path| File.directory?(path)}
-          dirs = slice.select {|path| File.directory?(path)}
-          FileUtils.rm(regulars)
-          FileUtils.rmdir(dirs)
+        # Remove all regular files first.
+        regulars = file_list.reject {|path| File.directory?(path)}
+        regulars.each_slice(100) do |slice|
+          FileUtils.rm(slice)
+        end
+
+        # ...and then remove all the empty directories
+        dirs = file_list.select {|path| File.directory?(path)}
+        dirs.each_slice(100) do |slice|
+          FileUtils.rmdir(slice)
         end
 
         # Cleaning up the second copy of the data since the backup completed successfully
