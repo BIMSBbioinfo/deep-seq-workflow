@@ -378,8 +378,10 @@ egrep -i -e './Logs|./Images|RTALogs|reports|.cif|.cif.gz|.FWHMMap|_pos.txt|Conv
           FileUtils.rm(slice)
         end
 
-        # ...and then remove all the empty directories
-        dirs = file_list.select {|path| File.directory?(path)}
+        # ...and then remove all the empty directories, from the
+        # inside out.
+        dirs = file_list.select {|path| File.directory?(path)}.
+                 sort_by {|dir| dir.count('/') }.reverse
         dirs.each_slice(100) do |slice|
           FileUtils.rmdir(slice)
         end
