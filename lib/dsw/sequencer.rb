@@ -15,13 +15,22 @@ class Sequencer
     end
   end
 
+  # Return an instance of a specialized sequencer class for the given
+  # RUN_DIR.  The class is selected by the sequencer serial number
+  # which must be encoded in the file name.
   def self.select(run_dir)
-    serial_no = `ls -ld #{Shellwords.escape(run_dir)}`.split("\s")[2].sub('seq_', '')
-
-    # rundir has already been moved to /data/basecalls
-    if serial_no == 'CF_Seq'
-      serial_no = File.basename(run_dir).split('_')[1]
-    end
+    serial_no = if run_dir.match? Conf.global_conf[:seq_dir_regexp]
+                  # Get the sequencer name from the parent directory
+                  run_dir.
+                    delete_prefix(Conf.global_conf[:basecall_dir]).
+                    delete_prefix(File::SEPARATOR).
+                    split(File::SEPARATOR)[0].
+                    sub('.seq_', '')
+                else
+                  # rundir has already been moved to /data/basecalls, so get the
+                  # sequencer name from the run name.
+                  File.basename(run_dir).split('_')[1]
+                end
 
     case serial_no[0]
     when 'M' then MiniSeq.new(run_dir)
