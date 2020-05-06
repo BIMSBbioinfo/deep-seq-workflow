@@ -52,7 +52,12 @@ class Workflow
   end
  
   def self.start(step)
-    Dir.glob(File.join(Conf.global_conf[:basecall_dir], Conf.global_conf[:seq_dir_regexp], '*'), File::FNM_PATHNAME).select {|d| File.directory?(d) }.each do |run_dir|
+    Dir.glob(File.join(Conf.global_conf[:basecall_dir],
+                       Conf.global_conf[:seq_dir_regexp],
+                       '*'),
+             File::FNM_PATHNAME).
+      select {|d| File.directory?(d) }.
+      each do |run_dir|
 
       # if the dir is an artifact, another process may have cleaned it up in the
       # meanwhile so we should skip it.
