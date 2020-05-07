@@ -36,23 +36,39 @@ describe NextSeq do
     FileUtils.mkdir_p @dir
   }
 
-  it 'assumes the sequencer is done when RTAComplete.txt exists' do
+  it 'assumes the sequencer is done when RTAComplete.txt is at least 15 mins old' do
     FileUtils.mkdir_p "#{@dir}/my-run-dir"
 
     seq = Sequencer.select("#{@dir}/my-run-dir")
     expect(seq.seq_complete?).to be false
 
     FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt"
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt",
+                    :mtime => Time.now - (14 * 60)
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt",
+                    :mtime => Time.now - (15 * 60)
     expect(seq.seq_complete?).to be true
   end
 
-  it 'assumes the sequencer is done when RunCompletionStatus.xml exists' do
+  it 'assumes the sequencer is done when RunCompletionStatus.xml is at least 15 mins old' do
     FileUtils.mkdir_p "#{@dir}/my-run-dir"
 
     seq = Sequencer.select("#{@dir}/my-run-dir")
     expect(seq.seq_complete?).to be false
 
     FileUtils.touch "#{@dir}/my-run-dir/RunCompletionStatus.xml"
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RunCompletionStatus.xml",
+                    :mtime => Time.now - (14 * 60)
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RunCompletionStatus.xml",
+                    :mtime => Time.now - (15 * 60)
     expect(seq.seq_complete?).to be true
   end
 end
