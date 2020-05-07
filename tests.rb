@@ -72,3 +72,47 @@ describe NextSeq do
     expect(seq.seq_complete?).to be true
   end
 end
+
+describe HiSeq do
+  before(:each) {
+    @dir = "#{$root}/.seq_K00302"
+    FileUtils.remove_dir @dir, force=true
+    FileUtils.mkdir_p @dir
+  }
+
+  it 'assumes the sequencer is done when RTAComplete.txt is at least 15 mins old' do
+    FileUtils.mkdir_p "#{@dir}/my-run-dir"
+
+    seq = Sequencer.select("#{@dir}/my-run-dir")
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt"
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt",
+                    :mtime => Time.now - (14 * 60)
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/RTAComplete.txt",
+                    :mtime => Time.now - (15 * 60)
+    expect(seq.seq_complete?).to be true
+  end
+
+  it 'assumes the sequencer is done when SequencingComplete.txt is at least 15 mins old' do
+    FileUtils.mkdir_p "#{@dir}/my-run-dir"
+
+    seq = Sequencer.select("#{@dir}/my-run-dir")
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/SequencingComplete.txt"
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/SequencingComplete.txt",
+                    :mtime => Time.now - (14 * 60)
+    expect(seq.seq_complete?).to be false
+
+    FileUtils.touch "#{@dir}/my-run-dir/SequencingComplete.txt",
+                    :mtime => Time.now - (15 * 60)
+    expect(seq.seq_complete?).to be true
+  end
+end
