@@ -8,10 +8,6 @@ class HiSeq < Sequencer
     ]
   end
 
-  def seq_complete?
-    File.exists?(File.join(run_dir, 'RTAComplete.txt')) || File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
-  end
-
   #
   # This is the main function that gets the workflow going.
   # If the sequencing is done:

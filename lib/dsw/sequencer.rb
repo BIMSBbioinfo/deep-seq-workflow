@@ -98,7 +98,10 @@ class Sequencer
   end
 
   def seq_complete?
-    File.exists?(File.join(run_dir, 'RTAComplete.txt'))
+    completion_files.any? do |file|
+      File.exists?(file) &&
+        File.mtime(file) < Time.now - (15 * 60)
+    end
   end
 
   # Checks wether access to the sequencing data has already been forbidden.

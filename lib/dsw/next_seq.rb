@@ -8,10 +8,6 @@ class NextSeq < Sequencer
     ]
   end
 
-  def seq_complete?
-    File.exists?(File.join(run_dir, 'RTAComplete.txt')) || File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
-  end
-
   def archive!
     if lock_file_present?(lock_file_name)
       logger.warn "Lock file \"#{lock_file_name}\" still there, skipping."
