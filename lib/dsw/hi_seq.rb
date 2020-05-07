@@ -1,6 +1,13 @@
 class HiSeq < Sequencer
   ALTERNATIVE_END_FILE = 'SequencingComplete.txt'
 
+  def completion_files
+    [
+      File.join(run_dir, 'RTAComplete.txt'),
+      File.join(run_dir, ALTERNATIVE_END_FILE)
+    ]
+  end
+
   def seq_complete?
     File.exists?(File.join(run_dir, 'RTAComplete.txt')) || File.exists?(File.join(run_dir, ALTERNATIVE_END_FILE))
   end
