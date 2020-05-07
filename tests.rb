@@ -32,7 +32,7 @@ end
 describe NextSeq do
   before(:each) {
     @dir = "#{$root}/.seq_NB501326"
-    FileUtils.remove_dir @dir
+    FileUtils.remove_dir @dir, force=true
     FileUtils.mkdir_p @dir
   }
 
