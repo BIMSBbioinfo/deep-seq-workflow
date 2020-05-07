@@ -15,6 +15,10 @@ class Sequencer
     end
   end
 
+  def completion_files
+    [ File.join(run_dir, 'RTAComplete.txt') ]
+  end
+
   # Return an instance of a specialized sequencer class for the given
   # RUN_DIR.  The class is selected by the sequencer serial number
   # which must be encoded in the file name.
