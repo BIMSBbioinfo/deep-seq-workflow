@@ -8,7 +8,7 @@ class Mailer
     "daniele.franze@mdc-berlin.de",
     "tatiana.borodina@mdc-berlin.de"
   ]
-  ADMINS = ["ricardo.wurmus@mdc-berlin.de", "martin.siegert@mdc-berlin.de"]
+  ADMINS = ["martin.siegert@mdc-berlin.de"]
 
   def self.notify_admins(manager, op_code, error =nil)
     unless Conf.global_conf[:debug]
