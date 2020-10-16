@@ -5,7 +5,7 @@ GEM
       ffi (~> 1.0, >= 1.0.11)
     commander (4.4.0)
       highline (~> 1.7.2)
-    ffi (1.9.14)
+    ffi (1.11.3)
     highline (1.7.8)
     rsync (1.0.9)
 
